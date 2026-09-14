@@ -58,6 +58,40 @@ export function useProfil(): Profil | null | undefined {
   return p;
 }
 
+const CLE_THEME = "matisp.theme";
+
+export type Theme = "systeme" | "clair" | "sombre";
+
+/** Thème d'affichage : « systeme » suit l'appareil, sinon forcé et mémorisé. */
+export function useTheme(): [Theme, (t: Theme) => void] {
+  const [theme, setTheme] = useState<Theme>("systeme");
+
+  useEffect(() => {
+    try {
+      const brut = localStorage.getItem(CLE_THEME);
+      if (brut === "dark") setTheme("sombre");
+      else if (brut === "light") setTheme("clair");
+    } catch {
+      /* navigation privée : on reste sur systeme */
+    }
+  }, []);
+
+  const definir = (t: Theme) => {
+    setTheme(t);
+    const attr = t === "sombre" ? "dark" : t === "clair" ? "light" : null;
+    try {
+      if (attr) localStorage.setItem(CLE_THEME, attr);
+      else localStorage.removeItem(CLE_THEME);
+    } catch {
+      /* ignoré */
+    }
+    if (attr) document.documentElement.setAttribute("data-theme", attr);
+    else document.documentElement.removeAttribute("data-theme");
+  };
+
+  return [theme, definir];
+}
+
 export function Chargement({ texte = "Un instant…" }: { texte?: string }) {
   return <div className="centre">{texte}</div>;
 }

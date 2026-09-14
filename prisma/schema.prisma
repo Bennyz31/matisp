@@ -83,6 +83,14 @@ model Utilisateur {
   cisId     String?
   cis       Cis?     @relation(fields: [cisId], references: [id])
 
+  /// Droit technique d'administration, indépendant de la fonction professionnelle
+  /// (un ADMIN reste médecin, infirmier, etc. — voir correctif du 14/09/2026).
+  admin     Boolean  @default(false)
+  /// Accès à la dotation VLM (SMUR sapeurs-pompiers), réservé à quelques ISP/médecins.
+  accesVLM  Boolean  @default(false)
+  /// Adresse mail personnelle, facultative, pour s'envoyer une copie des réassorts.
+  email     String?
+
   /// Argon2id du matricule au premier import, modifiable par l'utilisateur.
   mdpHash   String
   /// PIN facultatif de déverrouillage local (4 à 6 chiffres), jamais obligatoire.

@@ -14,12 +14,25 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   viewportFit: "cover",
-  themeColor: "#31506f",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#31506f" },
+    { media: "(prefers-color-scheme: dark)", color: "#12151a" },
+  ],
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr">
+      <head>
+        {/* Applique le thème choisi avant le premier rendu, pour éviter un
+            flash clair→sombre au chargement. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{var t=localStorage.getItem('matisp.theme');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}",
+          }}
+        />
+      </head>
       <body>
         <Demarrage />
         {children}

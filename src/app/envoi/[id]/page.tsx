@@ -25,6 +25,8 @@ export default function Envoi() {
   const [intervention, setIntervention] = useState<InterventionLocale | undefined>();
   const [lignes, setLignes] = useState<ConsommationLocale[]>([]);
   const [coches, setCoches] = useState<string[]>([]);
+  const [emailsManuels, setEmailsManuels] = useState<string[]>([]);
+  const [saisieEmail, setSaisieEmail] = useState("");
   const [etat, setEtat] = useState<{ type: "erreur" | "succes" | "info"; texte: string } | null>(null);
   const [occupe, setOccupe] = useState(false);
 
@@ -82,6 +84,24 @@ export default function Envoi() {
     construirePdf(donneesPdf!).save(nomFichier);
   }
 
+  function ajouterEmail() {
+    const e = saisieEmail.trim().toLowerCase();
+    if (!e) return;
+    if (!/^\S+@\S+\.\S+$/.test(e)) {
+      setEtat({ type: "erreur", texte: "Adresse mail invalide." });
+      return;
+    }
+    if (!emailsManuels.includes(e)) setEmailsManuels((l) => [...l, e]);
+    setSaisieEmail("");
+  }
+
+  function basculerEnvoiPersonnel() {
+    if (!moi?.email) return;
+    setEmailsManuels((l) =>
+      l.includes(moi.email!) ? l.filter((x) => x !== moi.email) : [...l, moi.email!],
+    );
+  }
+
   async function envoyer() {
     setOccupe(true);
     setEtat(null);
@@ -97,6 +117,7 @@ export default function Envoi() {
           body: JSON.stringify({
             interventionId: id,
             destinataireIds: coches,
+            emailsManuels,
             pdfBase64: pdfEnBase64(doc),
             nomFichier,
           }),
@@ -178,13 +199,57 @@ export default function Envoi() {
           ))
         )}
 
+        {moi.email ? (
+          <button
+            className={`ligne ${emailsManuels.includes(moi.email) ? "active" : ""}`}
+            onClick={basculerEnvoiPersonnel}
+          >
+            <span className="nom">
+              M&apos;envoyer une copie
+              <small>{moi.email}</small>
+            </span>
+            <span className="etiquette et-fait">{emailsManuels.includes(moi.email) ? "✓" : ""}</span>
+          </button>
+        ) : (
+          <p className="note">
+            Renseigne ton adresse mail dans « Mon compte » pour pouvoir t&apos;envoyer une copie.
+          </p>
+        )}
+
+        {emailsManuels
+          .filter((e) => e !== moi.email)
+          .map((e) => (
+            <div key={e} className="ligne">
+              <span className="nom">{e}</span>
+              <button
+                className="bouton fantome"
+                onClick={() => setEmailsManuels((l) => l.filter((x) => x !== e))}
+              >
+                Retirer
+              </button>
+            </div>
+          ))}
+
+        <div className="ligne">
+          <input
+            className="champ"
+            type="email"
+            placeholder="Autre adresse mail"
+            value={saisieEmail}
+            onChange={(e) => setSaisieEmail(e.target.value)}
+          />
+          <button className="bouton fantome" onClick={ajouterEmail}>
+            Ajouter
+          </button>
+        </div>
+
         <button className="bouton fantome" onClick={telecharger}>
           Aperçu — télécharger le PDF
         </button>
 
         <button
           className="bouton"
-          disabled={occupe || coches.length === 0 || !enLigne}
+          disabled={occupe || (coches.length === 0 && emailsManuels.length === 0) || !enLigne}
           onClick={envoyer}
         >
           {occupe ? "Envoi…" : dejaEnvoyee ? "Renvoyer le réassort" : "Envoyer le réassort"}

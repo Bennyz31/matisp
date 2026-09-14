@@ -22,6 +22,9 @@ export type Profil = {
   nom: string;
   prenom: string;
   fonction: string;
+  admin: boolean;
+  accesVLM: boolean;
+  email: string | null;
   motDePasseParDefaut: boolean;
   dotations: { id: string; identifiant: string; type: string }[];
 };
@@ -65,6 +68,14 @@ export function profil(): Profil | null {
 export function ouvrirSession(jetonSigne: string, p: Profil): void {
   local.ecrire(CLE_JETON, jetonSigne);
   local.ecrire(CLE_PROFIL, JSON.stringify(p));
+}
+
+/** Met à jour le profil mis en cache localement (ex. après changement d'e-mail),
+ * sans repasser par une reconnexion. */
+export function mettreAJourProfil(partiel: Partial<Profil>): void {
+  const actuel = profil();
+  if (!actuel) return;
+  local.ecrire(CLE_PROFIL, JSON.stringify({ ...actuel, ...partiel }));
 }
 
 export async function fermerSession(): Promise<void> {

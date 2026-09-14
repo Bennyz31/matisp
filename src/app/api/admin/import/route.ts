@@ -18,7 +18,7 @@ export const POST = (req: Request) =>
     const premierDemarrage = await aucunCompte();
     if (!premierDemarrage) {
       const moi = await exigerUtilisateur(req);
-      if (moi.fonction !== "ADMIN") throw new ErreurHttp(403, "Réservé aux administrateurs.");
+      if (!moi.admin) throw new ErreurHttp(403, "Réservé aux administrateurs.");
     }
 
     const donnees = await req.formData();

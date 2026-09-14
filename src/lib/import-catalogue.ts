@@ -29,6 +29,11 @@ const CATEGORIES: Record<string, CategorieProduit> = {
 
 const TYPES: Record<string, TypeDotation> = { SAC_ISP: "SAC_ISP", SAC_MED: "SAC_MED", VLM: "VLM" };
 const FONCTIONS = ["ISP", "MSP", "CONDUCTEUR", "PHARMACIEN", "ADMIN"] as const;
+/// Accès VLM (SMUR sapeurs-pompiers) accordé par défaut à tous les ISP, plus ces
+/// trois matricules nommément désignés par Ben (Blonstein, Pereira, Alaux).
+/// Provisoire : la V2 prévoit des droits plus fins par profil (ISP / ISP VLM /
+/// Médecin / Médecin VLM) — décision du 14/09/2026, à revoir alors.
+const MATRICULES_VLM = new Set(["5173", "4887", "5095"]);
 
 const texte = (v: unknown) => (v === undefined || v === null ? "" : String(v).trim());
 const oui = (v: unknown) => texte(v).toUpperCase().startsWith("O");
@@ -280,21 +285,27 @@ export async function importerCatalogue(fichier: ArrayBuffer): Promise<ResultatI
         const cisId = cisParCode.get(texte(l["CIS"])) ?? null;
         const actif = texte(l["ACTIF"]) === "" ? true : oui(l["ACTIF"]);
         const estAdmin = premierCompte && rang === 0;
+        // Recalculé à chaque import : un ISP nouvellement ajouté récupère l'accès
+        // VLM automatiquement, sans repasser par l'administration.
+        const accesVLM = fonction === "ISP" || MATRICULES_VLM.has(matricule);
         const existantId = existantsUtil.get(matricule);
 
         const utilisateur = existantId
           ? await prisma.utilisateur.update({
               where: { matricule },
-              data: { nom, prenom: texte(l["PRENOM"]), fonction, cisId, actif },
+              data: { nom, prenom: texte(l["PRENOM"]), fonction, cisId, actif, accesVLM },
             })
           : await prisma.utilisateur.create({
               data: {
                 matricule,
                 nom,
                 prenom: texte(l["PRENOM"]),
-                // Le tout premier utilisateur importé devient administrateur,
-                // sans quoi personne ne pourrait ouvrir cet écran ensuite.
-                fonction: estAdmin ? "ADMIN" : fonction,
+                fonction,
+                // Le tout premier utilisateur importé devient administrateur — droit
+                // technique séparé de la fonction professionnelle (voir schéma) :
+                // il reste ISP/MSP/etc., il n'est pas transformé en « ADMIN ».
+                admin: estAdmin,
+                accesVLM,
                 cisId,
                 actif,
                 // Mot de passe initial = matricule, haché. Jamais stocké en clair.

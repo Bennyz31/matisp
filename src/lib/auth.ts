@@ -16,7 +16,7 @@ function secret(): Uint8Array {
 
 const JOURS_SESSION = 90;
 
-export type Jeton = { sub: string; fonction: Fonction; nom: string };
+export type Jeton = { sub: string; fonction: Fonction; nom: string; admin: boolean; accesVLM: boolean };
 
 /**
  * Hachage par scrypt (module natif Node.js, pas de binding externe à compiler) :
@@ -57,7 +57,7 @@ export async function verifierMotDePasse(hash: string, valeur: string): Promise<
 }
 
 export async function signerJeton(j: Jeton): Promise<string> {
-  return new SignJWT({ fonction: j.fonction, nom: j.nom })
+  return new SignJWT({ fonction: j.fonction, nom: j.nom, admin: j.admin, accesVLM: j.accesVLM })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(j.sub)
     .setIssuedAt()
@@ -73,6 +73,8 @@ export async function lireJeton(jeton: string): Promise<Jeton | null> {
       sub: payload.sub,
       fonction: payload.fonction as Fonction,
       nom: String(payload.nom ?? ""),
+      admin: Boolean(payload.admin),
+      accesVLM: Boolean(payload.accesVLM),
     };
   } catch {
     return null;
@@ -103,7 +105,7 @@ export async function exigerUtilisateur(req: Request): Promise<Jeton> {
 
 export async function exigerAdmin(req: Request): Promise<Jeton> {
   const u = await exigerUtilisateur(req);
-  if (u.fonction !== "ADMIN") throw new ErreurHttp(403, "Réservé aux administrateurs.");
+  if (!u.admin) throw new ErreurHttp(403, "Réservé aux administrateurs.");
   return u;
 }
 

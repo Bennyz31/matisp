@@ -6,13 +6,20 @@ import { gerer } from "@/lib/reponse";
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
-const corps = z.object({
-  interventionId: z.string().regex(/^[0-9A-HJKMNP-TV-Z]{26}$/),
-  destinataireIds: z.array(z.string().uuid()).min(1, "Coche au moins un destinataire."),
-  /// PDF produit sur le téléphone : il existe donc aussi hors connexion.
-  pdfBase64: z.string().min(100),
-  nomFichier: z.string().max(120).default("reassort.pdf"),
-});
+const corps = z
+  .object({
+    interventionId: z.string().regex(/^[0-9A-HJKMNP-TV-Z]{26}$/),
+    destinataireIds: z.array(z.string().uuid()).default([]),
+    /// Adresses saisies à la main en plus des destinataires préconfigurés
+    /// (ex. pour s'envoyer une copie, ou un envoi ponctuel).
+    emailsManuels: z.array(z.string().email()).default([]),
+    /// PDF produit sur le téléphone : il existe donc aussi hors connexion.
+    pdfBase64: z.string().min(100),
+    nomFichier: z.string().max(120).default("reassort.pdf"),
+  })
+  .refine((d) => d.destinataireIds.length + d.emailsManuels.length > 0, {
+    message: "Coche ou saisis au moins un destinataire.",
+  });
 
 /**
  * Envoi différé : jamais automatique en fin d'intervention (règle impérative n°10).
@@ -22,7 +29,9 @@ const corps = z.object({
 export const POST = (req: Request) =>
   gerer(async () => {
     const moi = await exigerUtilisateur(req);
-    const { interventionId, destinataireIds, pdfBase64, nomFichier } = corps.parse(await req.json());
+    const { interventionId, destinataireIds, emailsManuels, pdfBase64, nomFichier } = corps.parse(
+      await req.json(),
+    );
 
     const lien = await prisma.interventionUtilisateur.findUnique({
       where: { interventionId_utilisateurId: { interventionId, utilisateurId: moi.sub } },
@@ -35,7 +44,16 @@ export const POST = (req: Request) =>
     const destinataires = await prisma.destinataire.findMany({
       where: { id: { in: destinataireIds }, actif: true },
     });
-    if (destinataires.length === 0) throw new ErreurHttp(400, "Aucun destinataire valide.");
+    // Fusion des destinataires préconfigurés et des adresses saisies à la main,
+    // sans doublon.
+    const emailsUniques = Array.from(
+      new Set([...destinataires.map((d) => d.email), ...emailsManuels]),
+    );
+    if (emailsUniques.length === 0) throw new ErreurHttp(400, "Aucun destinataire valide.");
+    const libellesEnvoi = [
+      ...destinataires.map((d) => d.libelle),
+      ...emailsManuels.filter((e) => !destinataires.some((d) => d.email === e)),
+    ];
 
     const cle = process.env.RESEND_API_KEY;
     const expediteur = process.env.RESEND_FROM || "MATISP <onboarding@resend.dev>";
@@ -49,7 +67,7 @@ export const POST = (req: Request) =>
     const envoi = await prisma.envoi.create({
       data: {
         interventionId,
-        destinataires: destinataires.map((d) => d.email),
+        destinataires: emailsUniques,
         statut: "EN_ATTENTE",
       },
     });
@@ -61,7 +79,10 @@ export const POST = (req: Request) =>
       return {
         envoi,
         messagerieConfiguree: false,
-        destinataires: destinataires.map((d) => ({ libelle: d.libelle, email: d.email })),
+        destinataires: emailsUniques.map((email) => ({
+          libelle: destinataires.find((d) => d.email === email)?.libelle ?? email,
+          email,
+        })),
       };
     }
 
@@ -70,7 +91,7 @@ export const POST = (req: Request) =>
       headers: { Authorization: `Bearer ${cle}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         from: expediteur,
-        to: destinataires.map((d) => d.email),
+        to: emailsUniques,
         subject: `Réassort MATISP — ${intervention.crss ?? "sans CRSS"} — ${dateFr}`,
         text: [
           "Liste de réassort générée par MATISP.",
@@ -103,12 +124,7 @@ export const POST = (req: Request) =>
       where: { id: interventionId },
       data: { statut: "ENVOYEE" },
     });
-    await journaliser(
-      moi.sub,
-      "ENVOI",
-      interventionId,
-      destinataires.map((d) => d.libelle).join(", "),
-    );
+    await journaliser(moi.sub, "ENVOI", interventionId, libellesEnvoi.join(", "));
 
     return { envoi: maj, messagerieConfiguree: true };
   });

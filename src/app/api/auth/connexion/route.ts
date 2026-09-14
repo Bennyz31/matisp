@@ -28,12 +28,17 @@ export const POST = (req: Request) =>
         sub: utilisateur.id,
         fonction: utilisateur.fonction,
         nom: `${utilisateur.prenom} ${utilisateur.nom}`,
+        admin: utilisateur.admin,
+        accesVLM: utilisateur.accesVLM,
       }),
       utilisateur: {
         id: utilisateur.id,
         nom: utilisateur.nom,
         prenom: utilisateur.prenom,
         fonction: utilisateur.fonction,
+        admin: utilisateur.admin,
+        accesVLM: utilisateur.accesVLM,
+        email: utilisateur.email,
         cis: utilisateur.cis,
         motDePasseParDefaut: await verifierMotDePasse(utilisateur.mdpHash, utilisateur.matricule),
         dotations: utilisateur.dotationsDetenues.map((d) => ({

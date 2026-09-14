@@ -34,7 +34,7 @@ export function construirePdf(d: DonneesPdf): jsPDF {
   let y = 20;
 
   doc.setFont("helvetica", "bold").setFontSize(18).setTextColor(20, 24, 31);
-  doc.text("MATISP — liste de réassort", marge, y);
+  doc.text(d.crss ? `MATISP — liste de réassort — ${d.crss}` : "MATISP — liste de réassort", marge, y);
   y += 6;
   doc.setFont("helvetica", "normal").setFontSize(9.5).setTextColor(74, 82, 94);
   doc.text("SDIS 82 · Service de santé et de secours médical", marge, y);

@@ -27,6 +27,7 @@ export default function Saisie() {
   const [requete, setRequete] = useState("");
   const [dotationActive, setDotationActive] = useState<string | null>(null);
   const [avecEquipements, setAvecEquipements] = useState(false);
+  const [vue, setVue] = useState<"tous" | "favoris">("tous");
 
   const recharger = useCallback(async () => setLignes(await lignesDe(id)), [id]);
 
@@ -43,10 +44,10 @@ export default function Saisie() {
   const index = useMemo(() => indexer(catalogue?.produits ?? []), [catalogue]);
 
   /**
-   * Produits fréquents : on ne dispose pas encore d'historique côté serveur au
-   * premier lancement, donc on part de la composition de la dotation, triée par
+   * Favoris : on ne dispose pas encore d'historique côté serveur au premier
+   * lancement, donc on part de la composition de la dotation, triée par
    * quantité théorique. Les PISU étant reportés en V2, c'est le seul raccourci —
-   * il ne doit jamais afficher un écran vide.
+   * il ne doit jamais afficher un écran vide. Sert aussi à booster la recherche.
    */
   const frequents = useMemo(() => {
     if (!catalogue || !dotationActive) return [];
@@ -60,6 +61,21 @@ export default function Saisie() {
       .sort((a, b) => b.quantite - a.quantite)
       .slice(0, 24)
       .map((l) => l.produit!);
+  }, [catalogue, dotationActive]);
+
+  /** Vue « Tous » : l'ensemble des consommables de la dotation active, par
+   * ordre alphabétique — vue par défaut demandée par Ben, pour ne pas cacher
+   * un produit moins courant derrière les 24 favoris. */
+  const tousProduits = useMemo(() => {
+    if (!catalogue || !dotationActive) return [];
+    const dotation = catalogue.dotations.find((d) => d.id === dotationActive);
+    const modele = catalogue.modeles.find((m) => m.id === dotation?.modeleId);
+    if (!modele) return [];
+    const parId = new Map(catalogue.produits.map((p) => [p.id, p]));
+    return modele.lignes
+      .map((l) => parId.get(l.produitId))
+      .filter((p): p is NonNullable<typeof p> => Boolean(p?.estConsommable))
+      .sort((a, b) => a.designation.localeCompare(b.designation, "fr"));
   }, [catalogue, dotationActive]);
 
   const resultats = useMemo(
@@ -112,7 +128,11 @@ export default function Saisie() {
     { references: 0, unites: 0 },
   );
 
-  const affiches: ProduitIndexe[] | typeof frequents = requete.trim() ? resultats : frequents;
+  const affiches: ProduitIndexe[] | typeof frequents = requete.trim()
+    ? resultats
+    : vue === "tous"
+      ? tousProduits
+      : frequents;
 
   return (
     <div className="ecran">
@@ -146,8 +166,26 @@ export default function Saisie() {
           </>
         )}
 
+        {!requete.trim() && (
+          <div className="puces">
+            <button className={`puce ${vue === "tous" ? "active" : ""}`} onClick={() => setVue("tous")}>
+              Tous
+            </button>
+            <button
+              className={`puce ${vue === "favoris" ? "active" : ""}`}
+              onClick={() => setVue("favoris")}
+            >
+              Favoris
+            </button>
+          </div>
+        )}
+
         <p className="libelle">
-          {requete.trim() ? `Résultats (${affiches.length})` : "Produits de la dotation"}
+          {requete.trim()
+            ? `Résultats (${affiches.length})`
+            : vue === "tous"
+              ? `Tous les produits (${affiches.length})`
+              : "Favoris"}
         </p>
 
         {affiches.length === 0 && (

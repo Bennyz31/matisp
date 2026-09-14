@@ -19,6 +19,49 @@
   color-scheme: light;
 }
 
+/* Mode sombre : automatique selon le système, ou forcé par [data-theme]
+   (réglage dans « Mon compte », persisté sur l'appareil). */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #12151a;
+    --surface: #1a1f26;
+    --surface-2: #232a33;
+    --ink: #eef1f4;
+    --ink-2: #aab3c0;
+    --ink-3: #7c8797;
+    --line: #2b323c;
+    --line-fort: #3a4451;
+    --rouge: #e6555f;
+    --rouge-clair: #3a2024;
+    --ardoise: #4d7ba8;
+    --ardoise-clair: #1c2a38;
+    --ambre: #d9a13f;
+    --ambre-clair: #362a15;
+    --vert: #4fb389;
+    --vert-clair: #17301f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --ground: #12151a;
+  --surface: #1a1f26;
+  --surface-2: #232a33;
+  --ink: #eef1f4;
+  --ink-2: #aab3c0;
+  --ink-3: #7c8797;
+  --line: #2b323c;
+  --line-fort: #3a4451;
+  --rouge: #e6555f;
+  --rouge-clair: #3a2024;
+  --ardoise: #4d7ba8;
+  --ardoise-clair: #1c2a38;
+  --ambre: #d9a13f;
+  --ambre-clair: #362a15;
+  --vert: #4fb389;
+  --vert-clair: #17301f;
+  color-scheme: dark;
+}
+
 * {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;

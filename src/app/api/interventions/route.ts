@@ -11,7 +11,7 @@ export const GET = (req: Request) =>
 
     // Le pharmacien consulte ce qui lui a été adressé ; il ne clôture rien.
     const filtre =
-      moi.fonction === "PHARMACIEN" || moi.fonction === "ADMIN"
+      moi.fonction === "PHARMACIEN" || moi.admin
         ? { envois: { some: {} } }
         : { utilisateurs: { some: { utilisateurId: moi.sub } } };
 

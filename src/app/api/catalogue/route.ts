@@ -9,9 +9,20 @@ export const dynamic = "force-dynamic";
  * La recherche tourne ensuite entièrement sur le téléphone : c'est la seule
  * façon de tenir « 1 à 2 secondes » avec un réseau médiocre ou absent.
  */
+/**
+ * Visibilité des dotations par profil (décision du 14/09/2026, Ben) :
+ * - ISP : dotation ISP + VLM (si accès VLM).
+ * - MSP (médecin) : dotation ISP + sa dotation médecin personnelle (ou la
+ *   générique si aucune ne lui est propre) + VLM (si accès VLM).
+ * - CONDUCTEUR / PHARMACIEN : rien par défaut (aucune consigne de Ben à ce
+ *   jour) — à ajuster s'il le précise.
+ * V2 (à revoir, noté par Ben) : droits plus fins par profil (ISP / ISP VLM /
+ * Médecin / Médecin VLM), et clarification de qui a réellement une dotation
+ * médecin personnelle.
+ */
 export const GET = (req: Request) =>
   gerer(async () => {
-    await exigerUtilisateur(req);
+    const moi = await exigerUtilisateur(req);
 
     const [produits, modeles, dotations, destinataires, cis, version] = await Promise.all([
       prisma.produit.findMany({
@@ -55,5 +66,22 @@ export const GET = (req: Request) =>
       versionCatalogue(),
     ]);
 
-    return { version, produits, modeles, dotations, destinataires, cis };
+    const typeParModeleId = new Map(modeles.map((m) => [m.id, m.type] as const));
+    const aDotationPersonnelle = dotations.some(
+      (d) => d.detenteurId === moi.sub && typeParModeleId.get(d.modeleId) === "SAC_MED",
+    );
+
+    const dotationsVisibles = dotations.filter((d) => {
+      const type = typeParModeleId.get(d.modeleId);
+      if (type === "VLM") return moi.accesVLM;
+      if (type === "SAC_ISP") return moi.fonction === "ISP" || moi.fonction === "MSP";
+      if (type === "SAC_MED") {
+        if (moi.fonction !== "MSP") return false;
+        if (d.detenteurId) return d.detenteurId === moi.sub;
+        return !aDotationPersonnelle;
+      }
+      return false;
+    });
+
+    return { version, produits, modeles, dotations: dotationsVisibles, destinataires, cis };
   });
