@@ -1,4 +1,3 @@
-import argon2 from "argon2";
 import crypto from "node:crypto";
 import { SignJWT, jwtVerify } from "jose";
 import type { Fonction } from "@prisma/client";
@@ -19,18 +18,39 @@ const JOURS_SESSION = 90;
 
 export type Jeton = { sub: string; fonction: Fonction; nom: string };
 
-const OPTIONS_ARGON: argon2.Options = {
-  type: argon2.argon2id,
-  memoryCost: 19456,
-  timeCost: 2,
-  parallelism: 1,
-};
+/**
+ * Hachage par scrypt (module natif Node.js, pas de binding externe à compiler) :
+ * argon2 a été retiré, son module natif échouant au chargement sur le
+ * déploiement serverless (fonction en échec avant même d'exécuter une ligne
+ * de code — voir le correctif du 14/09/2026). scrypt est un choix reconnu de
+ * même famille (dérivation de clé coûteuse en mémoire), disponible partout où
+ * Node.js tourne, y compris en serverless.
+ */
+const SCRYPT_LONGUEUR = 64;
 
-export const hacher = (valeur: string) => argon2.hash(valeur, OPTIONS_ARGON);
+export function hacher(valeur: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const sel = crypto.randomBytes(16);
+    crypto.scrypt(valeur, sel, SCRYPT_LONGUEUR, (erreur, derive) => {
+      if (erreur) reject(erreur);
+      else resolve(`scrypt:${sel.toString("hex")}:${derive.toString("hex")}`);
+    });
+  });
+}
 
 export async function verifierMotDePasse(hash: string, valeur: string): Promise<boolean> {
   try {
-    return await argon2.verify(hash, valeur);
+    const [algo, selHex, hashHex] = hash.split(":");
+    if (algo !== "scrypt" || !selHex || !hashHex) return false;
+    const sel = Buffer.from(selHex, "hex");
+    const attendu = Buffer.from(hashHex, "hex");
+    const obtenu = await new Promise<Buffer>((resolve, reject) => {
+      crypto.scrypt(valeur, sel, attendu.length, (erreur, derive) => {
+        if (erreur) reject(erreur);
+        else resolve(derive);
+      });
+    });
+    return attendu.length === obtenu.length && crypto.timingSafeEqual(attendu, obtenu);
   } catch {
     return false;
   }
