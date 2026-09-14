@@ -1,7 +1,7 @@
 import * as XLSX from "xlsx";
-import argon2 from "argon2";
 import type { CategorieProduit, Fonction, TypeDotation } from "@prisma/client";
 import { prisma, bumpVersionCatalogue } from "./db";
+import { hacher } from "./auth";
 
 /**
  * Import du catalogue depuis le classeur validé, déclenché par l'écran
@@ -75,10 +75,28 @@ export async function importerCatalogue(fichier: ArrayBuffer): Promise<ResultatI
   }
 
   // -------------------------------------------------------------- PRODUITS
+  // Écritures groupées plutôt qu'une requête par produit : sur un premier import
+  // (des centaines de lignes), l'aller-retour un par un vers la base risquait de
+  // dépasser la limite de temps de la fonction serveur.
   const idParCode = new Map<string, string>();
   let produitsCrees = 0;
   let produitsMisAJour = 0;
 
+  type DonneesProduit = {
+    designation: string;
+    gamme: string | null;
+    dci: string | null;
+    nomCommercial: string | null;
+    unite: string;
+    categorie: CategorieProduit;
+    synonymes: string[];
+    estConsommable: boolean;
+    estMedicament: boolean;
+    actif: boolean;
+    remarque: string | null;
+  };
+  type LigneProduit = { code: string; designation: string; data: DonneesProduit };
+  const lignesProduits: LigneProduit[] = [];
   for (const l of feuille("PRODUITS")) {
     const code = texte(l["ID"]);
     const designation = texte(l["DESIGNATION"]);
@@ -88,56 +106,91 @@ export async function importerCatalogue(fichier: ArrayBuffer): Promise<ResultatI
     const categorie = CATEGORIES[brute];
     if (!categorie) throw new Error(`Catégorie inconnue pour ${code} : « ${brute} ».`);
 
-    const data = {
+    lignesProduits.push({
+      code,
       designation,
-      gamme: texte(l["GAMME"]) || null,
-      dci: texte(l["DCI"]) || null,
-      nomCommercial: texte(l["NOM COMMERCIAL"]) || null,
-      unite: texte(l["UNITE"]) || "unité",
-      categorie,
-      synonymes: texte(l["SYNONYMES DE RECHERCHE"])
-        .split(";")
-        .map((s) => s.trim().toLowerCase())
-        .filter(Boolean),
-      estConsommable: oui(l["CONSOMMABLE"]),
-      estMedicament: oui(l["MEDICAMENT"]),
-      actif: texte(l["STATUT"]).toUpperCase() !== "INACTIF",
-      remarque: texte(l["A VERIFIER"]) || null,
-    };
+      data: {
+        designation,
+        gamme: texte(l["GAMME"]) || null,
+        dci: texte(l["DCI"]) || null,
+        nomCommercial: texte(l["NOM COMMERCIAL"]) || null,
+        unite: texte(l["UNITE"]) || "unité",
+        categorie,
+        synonymes: texte(l["SYNONYMES DE RECHERCHE"])
+          .split(";")
+          .map((s) => s.trim().toLowerCase())
+          .filter(Boolean),
+        estConsommable: oui(l["CONSOMMABLE"]),
+        estMedicament: oui(l["MEDICAMENT"]),
+        actif: texte(l["STATUT"]).toUpperCase() !== "INACTIF",
+        remarque: texte(l["A VERIFIER"]) || null,
+      },
+    });
+  }
 
-    const existant = await prisma.produit.findUnique({ where: { code } });
-    const produit = existant
-      ? await prisma.produit.update({ where: { code }, data })
-      : await prisma.produit.create({ data: { code, ...data } });
-    existant ? produitsMisAJour++ : produitsCrees++;
-    idParCode.set(code, produit.id);
+  const codesExistants = new Set(
+    (
+      await prisma.produit.findMany({
+        where: { code: { in: lignesProduits.map((p) => p.code) } },
+        select: { code: true },
+      })
+    ).map((p) => p.code),
+  );
+  const aCreer = lignesProduits.filter((p) => !codesExistants.has(p.code));
+  const aMettreAJour = lignesProduits.filter((p) => codesExistants.has(p.code));
+
+  if (aCreer.length > 0) {
+    await prisma.produit.createMany({
+      data: aCreer.map((p) => ({ code: p.code, ...p.data })),
+      skipDuplicates: true,
+    });
+  }
+  // Chaque produit peut avoir une donnée différente : la mise à jour reste une
+  // requête par ligne, mais lancée en parallèle plutôt qu'en séquence.
+  await Promise.all(
+    aMettreAJour.map((p) => prisma.produit.update({ where: { code: p.code }, data: p.data })),
+  );
+  produitsCrees = aCreer.length;
+  produitsMisAJour = aMettreAJour.length;
+
+  for (const p of await prisma.produit.findMany({
+    where: { code: { in: lignesProduits.map((l) => l.code) } },
+    select: { id: true, code: true },
+  })) {
+    idParCode.set(p.code, p.id);
   }
 
   // ------------------------------------------------------------- DOTATIONS
-  const modeleParCode = new Map<string, string>();
-  for (const l of feuille("DOTATIONS")) {
-    const code = texte(l["CODE"]);
-    if (!code) continue;
-    const type = TYPES[texte(l["TYPE"])];
-    if (!type) throw new Error(`Type de dotation inconnu : « ${texte(l["TYPE"])} ».`);
-
-    const modele = await prisma.modeleDotation.upsert({
-      where: { code },
-      create: { code, type, libelle: texte(l["LIBELLE"]) || code },
-      update: { libelle: texte(l["LIBELLE"]) || code },
-    });
-    modeleParCode.set(code, modele.id);
-
-    await prisma.dotation.upsert({
-      where: { identifiant: code },
-      create: {
-        modeleId: modele.id,
-        identifiant: code,
-        portee: texte(l["PORTEE"]) === "COLLECTIF" ? "COLLECTIF" : "INDIVIDUEL",
-      },
-      update: {},
-    });
+  // Peu de lignes en général, mais lancées en parallèle par cohérence avec le
+  // reste de l'import.
+  const lignesDotations = feuille("DOTATIONS")
+    .map((l) => ({ code: texte(l["CODE"]), l }))
+    .filter((x) => x.code);
+  for (const { code, l } of lignesDotations) {
+    if (!TYPES[texte(l["TYPE"])]) throw new Error(`Type de dotation inconnu : « ${texte(l["TYPE"])} » (${code}).`);
   }
+  const modeleParCode = new Map<string, string>(
+    await Promise.all(
+      lignesDotations.map(async ({ code, l }) => {
+        const type = TYPES[texte(l["TYPE"])];
+        const modele = await prisma.modeleDotation.upsert({
+          where: { code },
+          create: { code, type, libelle: texte(l["LIBELLE"]) || code },
+          update: { libelle: texte(l["LIBELLE"]) || code },
+        });
+        await prisma.dotation.upsert({
+          where: { identifiant: code },
+          create: {
+            modeleId: modele.id,
+            identifiant: code,
+            portee: texte(l["PORTEE"]) === "COLLECTIF" ? "COLLECTIF" : "INDIVIDUEL",
+          },
+          update: {},
+        });
+        return [code, modele.id] as const;
+      }),
+    ),
+  );
 
   // ----------------------------------------------------------- COMPOSITION
   const parModele = new Map<
@@ -195,68 +248,79 @@ export async function importerCatalogue(fichier: ArrayBuffer): Promise<ResultatI
   }
 
   // --------------------------------------------------------- UTILISATEURS
+  // Le hachage du mot de passe (argon2) et l'écriture en base se font en
+  // parallèle par utilisateur plutôt qu'en séquence : sur 80+ comptes, faire
+  // les deux l'un après l'autre pour chacun risquait, cumulé au reste de
+  // l'import, de dépasser la limite de temps de la fonction serveur.
   let utilisateurs = 0;
   if (wb.SheetNames.includes("UTILISATEURS")) {
     const premierCompte = (await prisma.utilisateur.count()) === 0;
-    let rang = 0;
 
-    for (const l of feuille("UTILISATEURS")) {
-      const matricule = texte(l["MATRICULE"]);
-      const nom = texte(l["NOM"]);
-      if (!matricule || !nom || nom.toUpperCase() === "EXEMPLE") continue;
+    const lignesUtil = feuille("UTILISATEURS")
+      // « NOM (+PRENOM) » : classeur où le nom complet n'est pas scindé (source sans prénom séparé).
+      .map((l) => ({ l, matricule: texte(l["MATRICULE"]), nom: texte(l["NOM"]) || texte(l["NOM (+PRENOM)"]) }))
+      .filter(({ matricule, nom }) => matricule && nom && nom.toUpperCase() !== "EXEMPLE");
 
-      const brute = texte(l["FONCTION"]).toUpperCase();
-      const fonction = (FONCTIONS as readonly string[]).includes(brute)
-        ? (brute as Fonction)
-        : "ISP";
-      if (!(FONCTIONS as readonly string[]).includes(brute)) {
-        avertissements.push(`Fonction « ${brute} » inconnue pour ${nom} : ISP par défaut.`);
-      }
+    const existantsUtil = new Map(
+      (
+        await prisma.utilisateur.findMany({
+          where: { matricule: { in: lignesUtil.map((x) => x.matricule) } },
+          select: { id: true, matricule: true },
+        })
+      ).map((u) => [u.matricule, u.id] as const),
+    );
 
-      const cisId = cisParCode.get(texte(l["CIS"])) ?? null;
-      const existant = await prisma.utilisateur.findUnique({ where: { matricule } });
+    const resultats = await Promise.all(
+      lignesUtil.map(async ({ l, matricule, nom }, rang) => {
+        const brute = texte(l["FONCTION"]).toUpperCase();
+        const connue = (FONCTIONS as readonly string[]).includes(brute);
+        const fonction = connue ? (brute as Fonction) : "ISP";
+        if (!connue) avertissements.push(`Fonction « ${brute} » inconnue pour ${nom} : ISP par défaut.`);
 
-      const utilisateur = existant
-        ? await prisma.utilisateur.update({
-            where: { matricule },
-            data: {
-              nom,
-              prenom: texte(l["PRENOM"]),
-              fonction,
-              cisId,
-              actif: texte(l["ACTIF"]) === "" ? true : oui(l["ACTIF"]),
-            },
-          })
-        : await prisma.utilisateur.create({
-            data: {
-              matricule,
-              nom,
-              prenom: texte(l["PRENOM"]),
-              // Le tout premier utilisateur importé devient administrateur,
-              // sans quoi personne ne pourrait ouvrir cet écran ensuite.
-              fonction: premierCompte && rang === 0 ? "ADMIN" : fonction,
-              cisId,
-              actif: texte(l["ACTIF"]) === "" ? true : oui(l["ACTIF"]),
-              // Mot de passe initial = matricule, haché. Jamais stocké en clair.
-              mdpHash: await argon2.hash(matricule, { type: argon2.argon2id }),
-            },
-          });
+        const cisId = cisParCode.get(texte(l["CIS"])) ?? null;
+        const actif = texte(l["ACTIF"]) === "" ? true : oui(l["ACTIF"]);
+        const estAdmin = premierCompte && rang === 0;
+        const existantId = existantsUtil.get(matricule);
 
-      if (premierCompte && rang === 0) {
-        avertissements.push(
-          `${utilisateur.prenom} ${utilisateur.nom} a reçu le rôle administrateur (premier compte créé).`,
-        );
-      }
+        const utilisateur = existantId
+          ? await prisma.utilisateur.update({
+              where: { matricule },
+              data: { nom, prenom: texte(l["PRENOM"]), fonction, cisId, actif },
+            })
+          : await prisma.utilisateur.create({
+              data: {
+                matricule,
+                nom,
+                prenom: texte(l["PRENOM"]),
+                // Le tout premier utilisateur importé devient administrateur,
+                // sans quoi personne ne pourrait ouvrir cet écran ensuite.
+                fonction: estAdmin ? "ADMIN" : fonction,
+                cisId,
+                actif,
+                // Mot de passe initial = matricule, haché. Jamais stocké en clair.
+                mdpHash: await hacher(matricule),
+              },
+            });
 
-      const codeDotation = texte(l["DOTATION HABITUELLE"]);
-      if (codeDotation) {
-        await prisma.dotation
-          .update({ where: { identifiant: codeDotation }, data: { detenteurId: utilisateur.id } })
-          .catch(() => undefined);
-      }
-      utilisateurs++;
-      rang++;
-    }
+        if (estAdmin) {
+          avertissements.push(
+            `${utilisateur.prenom} ${utilisateur.nom} a reçu le rôle administrateur (premier compte créé).`,
+          );
+        }
+        return { utilisateur, codeDotation: texte(l["DOTATION HABITUELLE"]) };
+      }),
+    );
+
+    await Promise.all(
+      resultats
+        .filter((r) => r.codeDotation)
+        .map((r) =>
+          prisma.dotation
+            .update({ where: { identifiant: r.codeDotation }, data: { detenteurId: r.utilisateur.id } })
+            .catch(() => undefined),
+        ),
+    );
+    utilisateurs = resultats.length;
   }
 
   // --------------------------------------------------------- DESTINATAIRES
