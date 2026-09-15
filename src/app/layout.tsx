@@ -7,6 +7,14 @@ export const metadata: Metadata = {
   description: "Réassort du matériel et des médicaments — SDIS 82",
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, title: "MATISP", statusBarStyle: "black-translucent" },
+  icons: {
+    icon: [
+      { url: "/favicon.png", sizes: "64x64", type: "image/png" },
+      { url: "/icone-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icone-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export const viewport: Viewport = {

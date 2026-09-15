@@ -8,6 +8,7 @@ import {
   listerConsommations,
   listerInterventions,
   lireCatalogue,
+  lireIntervention,
   vider,
   type Catalogue,
   type ConsommationLocale,
@@ -16,6 +17,7 @@ import {
 
 const CLE_JETON = "matisp.jeton";
 const CLE_PROFIL = "matisp.profil";
+const CLE_DERNIER_RAPATRIEMENT = "matisp.dernierRapatriement";
 
 export type Profil = {
   id: string;
@@ -150,6 +152,7 @@ export function nouvelleLigne(
   dotationId: string,
   produitId: string,
   type: ConsommationLocale["type"] = "CONSOMME",
+  auteur: string | null = null,
 ): ConsommationLocale {
   return {
     id: ulid(),
@@ -161,6 +164,7 @@ export function nouvelleLigne(
     commentaire: null,
     saisiLe: new Date().toISOString(),
     synchronisee: false,
+    auteur,
   };
 }
 
@@ -189,7 +193,10 @@ export async function synchroniser(): Promise<{ envoyees: number } | null> {
     for (const i of aEnvoyer) idsConnus.add(i.id);
     const lignesValides = lignes.filter((c) => idsConnus.has(c.interventionId));
 
-    if (aEnvoyer.length === 0 && lignesValides.length === 0) return { envoyees: 0 };
+    if (aEnvoyer.length === 0 && lignesValides.length === 0) {
+      await rapatrier().catch(() => undefined);
+      return { envoyees: 0 };
+    }
 
     const { acceptes } = await api<{ acceptes: string[] }>("/sync", {
       method: "POST",
@@ -222,6 +229,7 @@ export async function synchroniser(): Promise<{ envoyees: number } | null> {
     for (const c of lignesValides) {
       if (ok.has(c.id)) await ecrireConsommation({ ...c, synchronisee: true });
     }
+    await rapatrier().catch(() => undefined);
     return { envoyees: ok.size };
   } catch {
     return null;
@@ -229,3 +237,82 @@ export async function synchroniser(): Promise<{ envoyees: number } | null> {
     enCours = false;
   }
 }
+
+type ConsommationDistante = {
+  id: string;
+  interventionId: string;
+  dotationId: string;
+  produitId: string;
+  quantite: number;
+  type: ConsommationLocale["type"];
+  commentaire: string | null;
+  saisiLe: string;
+  utilisateur: { nom: string; prenom: string };
+};
+
+type InterventionDistante = {
+  id: string;
+  debutLe: string;
+  finLe: string | null;
+  crss: string | null;
+  statut: InterventionLocale["statut"];
+  dotations: { dotationId: string }[];
+};
+
+/**
+ * Rapatrie ce que les autres déclarants ont ajouté aux interventions
+ * auxquelles je participe (ex. ISP + MSP sur une même sortie VLM), pour que
+ * le récapitulatif et le PDF envoyés depuis ce téléphone ne perdent jamais ce
+ * qu'un autre a saisi sur le sien. Sans conflit possible : chaque ligne garde
+ * l'identifiant donné par le téléphone qui l'a créée, on ne fait qu'ajouter
+ * celles qu'on ne connaît pas encore ou mettre à jour celles déjà connues.
+ */
+async function rapatrier(): Promise<void> {
+  const depuis = local.lire(CLE_DERNIER_RAPATRIEMENT) ?? new Date(0).toISOString();
+  const { interventions, consommations, horodatage } = await api<{
+    interventions: InterventionDistante[];
+    consommations: ConsommationDistante[];
+    horodatage: string;
+  }>(`/sync?depuis=${encodeURIComponent(depuis)}`);
+
+  for (const i of interventions) {
+    const locale = await lireIntervention(i.id);
+    await ecrireIntervention({
+      id: i.id,
+      debutLe: i.debutLe,
+      finLe: i.finLe,
+      crss: i.crss,
+      // Le statut local, s'il est plus avancé (ex. clôturé sur ce téléphone
+      // sans être encore reparti), n'est jamais rétrogradé par le rapatriement.
+      statut: rangStatutClient(locale?.statut) > rangStatutClient(i.statut) ? locale!.statut : i.statut,
+      dotationIds: Array.from(
+        new Set([...(locale?.dotationIds ?? []), ...i.dotations.map((d) => d.dotationId)]),
+      ),
+      synchronisee: true,
+    });
+  }
+
+  for (const c of consommations) {
+    await ecrireConsommation({
+      id: c.id,
+      interventionId: c.interventionId,
+      dotationId: c.dotationId,
+      produitId: c.produitId,
+      quantite: c.quantite,
+      type: c.type,
+      commentaire: c.commentaire,
+      saisiLe: c.saisiLe,
+      synchronisee: true,
+      auteur: `${c.utilisateur.prenom} ${c.utilisateur.nom}`,
+    });
+  }
+
+  // Petite marge de recouvrement pour tolérer un décalage d'horloge entre le
+  // téléphone et le serveur : mieux vaut rapatrier deux fois la même ligne
+  // (sans effet, même identifiant) qu'en manquer une.
+  const marge = new Date(new Date(horodatage).getTime() - 5 * 60_000).toISOString();
+  local.ecrire(CLE_DERNIER_RAPATRIEMENT, marge);
+}
+
+const ORDRE_STATUT = ["BROUILLON", "TERMINEE", "ENVOYEE", "CLOTUREE"];
+const rangStatutClient = (s: string | undefined) => (s ? ORDRE_STATUT.indexOf(s) : -1);

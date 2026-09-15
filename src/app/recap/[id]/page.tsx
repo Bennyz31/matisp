@@ -11,6 +11,7 @@ import {
   type Catalogue,
   type ConsommationLocale,
   type InterventionLocale,
+  type Produit,
 } from "@/client/stockage";
 import { Barre, Chargement, useProfil } from "@/client/ui";
 
@@ -37,7 +38,10 @@ export default function Recapitulatif() {
   }, [id]);
 
   useEffect(() => {
-    void charger();
+    // On rapatrie d'abord ce que d'autres déclarants ont ajouté à cette même
+    // intervention (ex. ISP + médecin sur un VLM), pour que le récapitulatif
+    // n'en oublie aucun avant l'envoi.
+    void synchroniser().then(charger);
   }, [charger]);
 
   const blocs = useMemo(() => {
@@ -47,14 +51,24 @@ export default function Recapitulatif() {
     for (const l of lignes) {
       parDotation.set(l.dotationId, [...(parDotation.get(l.dotationId) ?? []), l]);
     }
-    return [...parDotation.entries()].map(([dotationId, liste]) => ({
-      dotationId,
-      nom: catalogue.dotations.find((d) => d.id === dotationId)?.identifiant ?? "Dotation",
-      lignes: liste
-        .map((l) => ({ ...l, produit: parProduit.get(l.produitId) }))
-        .filter((l) => l.produit)
-        .sort((a, b) => a.produit!.designation.localeCompare(b.produit!.designation, "fr")),
-    }));
+    return [...parDotation.entries()].map(([dotationId, liste]) => {
+      // Un même produit peut avoir une ligne par déclarant (même dotation
+      // partagée) : on additionne pour n'afficher qu'un seul total.
+      const groupes = new Map<string, ConsommationLocale & { produit: Produit | undefined }>();
+      for (const l of liste) {
+        const cle = `${l.produitId}|${l.type}`;
+        const existant = groupes.get(cle);
+        if (existant) existant.quantite += l.quantite;
+        else groupes.set(cle, { ...l, produit: parProduit.get(l.produitId) });
+      }
+      return {
+        dotationId,
+        nom: catalogue.dotations.find((d) => d.id === dotationId)?.libelle ?? "Dotation",
+        lignes: [...groupes.values()]
+          .filter((l) => l.produit)
+          .sort((a, b) => a.produit!.designation.localeCompare(b.produit!.designation, "fr")),
+      };
+    });
   }, [catalogue, lignes]);
 
   if (moi === undefined || !catalogue) return <Chargement />;

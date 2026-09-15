@@ -71,17 +71,37 @@ export const GET = (req: Request) =>
       (d) => d.detenteurId === moi.sub && typeParModeleId.get(d.modeleId) === "SAC_MED",
     );
 
-    const dotationsVisibles = dotations.filter((d) => {
-      const type = typeParModeleId.get(d.modeleId);
-      if (type === "VLM") return moi.accesVLM;
-      if (type === "SAC_ISP") return moi.fonction === "ISP" || moi.fonction === "MSP";
-      if (type === "SAC_MED") {
-        if (moi.fonction !== "MSP") return false;
-        if (d.detenteurId) return d.detenteurId === moi.sub;
-        return !aDotationPersonnelle;
-      }
-      return false;
-    });
+    /**
+     * Libellé et ordre d'affichage (décision du 14/09/2026, Ben) : la dotation
+     * qui correspond à la fonction de l'utilisateur passe en premier, pour
+     * limiter le nombre de références proposées par défaut sans jamais bloquer
+     * l'accès aux autres (rien n'est masqué, seul l'ordre change) :
+     * - ISP : « ISP » puis « VLM ».
+     * - MSP sans dotation personnelle : « MSP » (générique) puis « VLM » puis « ISP ».
+     * - MSP avec dotation personnelle (ex. Blonstein) : « Mon sac » puis « VLM » puis « ISP ».
+     */
+    const dotationsVisibles = dotations
+      .filter((d) => {
+        const type = typeParModeleId.get(d.modeleId);
+        if (type === "VLM") return moi.accesVLM;
+        if (type === "SAC_ISP") return moi.fonction === "ISP" || moi.fonction === "MSP";
+        if (type === "SAC_MED") {
+          if (moi.fonction !== "MSP") return false;
+          if (d.detenteurId) return d.detenteurId === moi.sub;
+          return !aDotationPersonnelle;
+        }
+        return false;
+      })
+      .map((d) => {
+        const type = typeParModeleId.get(d.modeleId);
+        const personnelle = type === "SAC_MED" && d.detenteurId === moi.sub;
+        const libelle = type === "VLM" ? "VLM" : type === "SAC_ISP" ? "ISP" : personnelle ? "Mon sac" : "MSP";
+        const ordre =
+          type === "SAC_MED" ? 0 : type === "VLM" ? 1 : moi.fonction === "ISP" ? 0 : 2;
+        return { ...d, libelle, ordre };
+      })
+      .sort((a, b) => a.ordre - b.ordre)
+      .map(({ ordre: _ordre, ...d }) => d);
 
     return { version, produits, modeles, dotations: dotationsVisibles, destinataires, cis };
   });

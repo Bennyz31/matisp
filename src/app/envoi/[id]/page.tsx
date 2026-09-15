@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { api, synchroniser } from "@/client/session";
+import { api, synchroniser, type Profil } from "@/client/session";
 import {
   ecrireIntervention,
   lignesDe,
@@ -14,6 +14,107 @@ import {
 } from "@/client/stockage";
 import { construirePdf, nomFichierPdf, pdfEnBase64, type DonneesPdf } from "@/client/pdf";
 import { Barre, Chargement, useEnLigne, useProfil } from "@/client/ui";
+
+/** Forme renvoyée par GET /api/interventions/:id/reassort (voir src/lib/reassort.ts). */
+type ReassortServeur = {
+  crss: string | null;
+  debutLe: string;
+  declarants: { nom: string; fonction: string }[];
+  blocs: {
+    dotation: string;
+    declarants: string[];
+    lignes: {
+      code: string;
+      designation: string;
+      unite: string;
+      quantite: number;
+      type: "CONSOMME" | "PERDU" | "CASSE";
+      commentaire: string | null;
+    }[];
+  }[];
+};
+
+function convertirReassort(r: ReassortServeur): DonneesPdf {
+  return {
+    crss: r.crss,
+    debutLe: r.debutLe,
+    declarants:
+      r.declarants.length > 0 ? r.declarants.map((d) => `${d.nom} (${d.fonction})`) : ["—"],
+    blocs: r.blocs.map((b) => ({
+      dotation: b.dotation,
+      declarants: b.declarants.length > 0 ? b.declarants : ["—"],
+      lignes: b.lignes.map((l) => ({
+        code: l.code,
+        designation: l.designation,
+        quantite: l.quantite,
+        unite: l.unite,
+        mention: l.type === "PERDU" ? "perdu" : l.type === "CASSE" ? "cassé" : undefined,
+      })),
+    })),
+  };
+}
+
+/**
+ * Regroupe les lignes d'un même produit (même type) au sein d'une dotation :
+ * quand plusieurs déclarants sortent la même dotation partagée (ex. VLM, ISP
+ * + médecin), chacun a sa propre ligne côté serveur — on les additionne ici
+ * pour n'afficher qu'une seule quantité totale par produit, sans rien perdre.
+ */
+function grouperParProduit(liste: ConsommationLocale[]) {
+  const groupes = new Map<string, { l: ConsommationLocale; total: number; auteurs: Set<string> }>();
+  for (const l of liste) {
+    const cle = `${l.produitId}|${l.type}`;
+    const g = groupes.get(cle);
+    if (g) {
+      g.total += l.quantite;
+      if (l.auteur) g.auteurs.add(l.auteur);
+    } else {
+      groupes.set(cle, { l, total: l.quantite, auteurs: new Set(l.auteur ? [l.auteur] : []) });
+    }
+  }
+  return [...groupes.values()];
+}
+
+function construireDonnees(
+  catalogue: Catalogue,
+  intervention: InterventionLocale,
+  lignes: ConsommationLocale[],
+  moi: Profil,
+): DonneesPdf {
+  const parProduit = new Map(catalogue.produits.map((p) => [p.id, p]));
+  const parDotation = new Map<string, ConsommationLocale[]>();
+  for (const l of lignes) {
+    parDotation.set(l.dotationId, [...(parDotation.get(l.dotationId) ?? []), l]);
+  }
+  const tousAuteurs = new Set(lignes.map((l) => l.auteur).filter((a): a is string => Boolean(a)));
+
+  return {
+    crss: intervention.crss,
+    debutLe: intervention.debutLe,
+    declarants: tousAuteurs.size > 0 ? [...tousAuteurs] : [`${moi.prenom} ${moi.nom} (${moi.fonction})`],
+    blocs: [...parDotation.entries()].map(([dotationId, liste]) => {
+      const groupes = grouperParProduit(liste)
+        .map((g) => ({ ...g, p: parProduit.get(g.l.produitId) }))
+        .filter((x) => x.p)
+        .sort((a, b) => a.p!.designation.localeCompare(b.p!.designation, "fr"));
+      const declarantsBloc = new Set<string>();
+      for (const g of groupes) for (const a of g.auteurs) declarantsBloc.add(a);
+      return {
+        // Identifiant brut (pas « Mon sac ») : ce document est lu par un tiers
+        // (pharmacie), pas seulement par son auteur.
+        dotation: catalogue.dotations.find((d) => d.id === dotationId)?.identifiant ?? "Dotation",
+        declarants: declarantsBloc.size > 0 ? [...declarantsBloc] : [`${moi.prenom} ${moi.nom}`],
+        lignes: groupes.map(({ l, total, p }) => ({
+          code: p!.code,
+          designation: p!.designation,
+          quantite: total,
+          unite: p!.unite,
+          mention: l.type === "PERDU" ? "perdu" : l.type === "CASSE" ? "cassé" : undefined,
+        })),
+      };
+    }),
+  };
+}
 
 export default function Envoi() {
   const router = useRouter();
@@ -48,31 +149,7 @@ export default function Envoi() {
 
   const donneesPdf: DonneesPdf | null = useMemo(() => {
     if (!catalogue || !intervention || !moi) return null;
-    const parProduit = new Map(catalogue.produits.map((p) => [p.id, p]));
-    const parDotation = new Map<string, ConsommationLocale[]>();
-    for (const l of lignes) {
-      parDotation.set(l.dotationId, [...(parDotation.get(l.dotationId) ?? []), l]);
-    }
-    return {
-      crss: intervention.crss,
-      debutLe: intervention.debutLe,
-      declarants: [`${moi.prenom} ${moi.nom} (${moi.fonction})`],
-      blocs: [...parDotation.entries()].map(([dotationId, liste]) => ({
-        dotation: catalogue.dotations.find((d) => d.id === dotationId)?.identifiant ?? "Dotation",
-        declarants: [`${moi.prenom} ${moi.nom}`],
-        lignes: liste
-          .map((l) => ({ l, p: parProduit.get(l.produitId) }))
-          .filter((x) => x.p)
-          .sort((a, b) => a.p!.designation.localeCompare(b.p!.designation, "fr"))
-          .map(({ l, p }) => ({
-            code: p!.code,
-            designation: p!.designation,
-            quantite: l.quantite,
-            unite: p!.unite,
-            mention: l.type === "PERDU" ? "perdu" : l.type === "CASSE" ? "cassé" : undefined,
-          })),
-      })),
-    };
+    return construireDonnees(catalogue, intervention, lignes, moi);
   }, [catalogue, intervention, lignes, moi]);
 
   if (moi === undefined || !catalogue) return <Chargement />;
@@ -106,10 +183,22 @@ export default function Envoi() {
     setOccupe(true);
     setEtat(null);
     try {
-      // On pousse d'abord la saisie : le serveur doit connaître l'intervention
-      // avant de pouvoir enregistrer l'envoi.
+      // On pousse d'abord la saisie (le serveur doit connaître l'intervention
+      // avant d'enregistrer l'envoi), puis on demande le réassort calculé par
+      // le serveur — la somme de TOUS les déclarants (ex. ISP + médecin sur
+      // un VLM), pas seulement ce que ce téléphone a vu. Hors connexion, on
+      // retombe sur le calcul local (rapatriement inclus dans synchroniser).
       await synchroniser();
-      const doc = construirePdf(donneesPdf!);
+      let donneesAJour: DonneesPdf;
+      try {
+        const reassort = await api<ReassortServeur>(`/interventions/${id}/reassort`);
+        donneesAJour = convertirReassort(reassort);
+      } catch {
+        const carteAJour = await lignesDe(id);
+        const lignesAJour = [...carteAJour.values()].filter((l) => l.quantite > 0);
+        donneesAJour = construireDonnees(catalogue!, intervention!, lignesAJour, moi!);
+      }
+      const doc = construirePdf(donneesAJour);
       const reponse = await api<{ messagerieConfiguree: boolean; destinataires?: { libelle: string; email: string }[] }>(
         "/envoi",
         {

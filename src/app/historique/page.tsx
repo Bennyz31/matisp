@@ -62,7 +62,7 @@ export default function Historique() {
                 crss: i.crss,
                 statut: i.statut,
                 dotations: i.dotationIds.map(
-                  (d) => catalogue?.dotations.find((x) => x.id === d)?.identifiant ?? "dotation",
+                  (d) => catalogue?.dotations.find((x) => x.id === d)?.libelle ?? "dotation",
                 ),
                 declarants: [],
                 nbReferences: siennes.length,

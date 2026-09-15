@@ -88,6 +88,10 @@ export type Modele = {
 export type Dotation = {
   id: string;
   identifiant: string;
+  /// Libellé d'affichage court, calculé côté serveur selon le profil de
+  /// l'utilisateur (« ISP », « VLM », « MSP » ou « Mon sac » pour une dotation
+  /// médecin personnelle) — à utiliser à la place de `identifiant` dans l'UI.
+  libelle: string;
   portee: string;
   modeleId: string;
   detenteurId: string | null;
@@ -123,6 +127,11 @@ export type ConsommationLocale = {
   commentaire: string | null;
   saisiLe: string;
   synchronisee: boolean;
+  /// Prénom + nom de l'auteur — utile quand plusieurs déclarants sortent la
+  /// même dotation partagée (ex. VLM) : permet de fusionner sans se marcher
+  /// dessus et de savoir qui a saisi quoi. Renseigné localement à la création
+  /// et par le rapatriement des lignes des autres déclarants (voir session.ts).
+  auteur?: string | null;
 };
 
 // -------------------------------------------------------------- catalogue

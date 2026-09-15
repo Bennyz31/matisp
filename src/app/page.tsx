@@ -59,8 +59,7 @@ export default function Accueil() {
   if (!moi) return null;
 
   const maDotation = moi.dotations[0];
-  const nomDotation = (id: string) =>
-    catalogue?.dotations.find((d) => d.id === id)?.identifiant ?? "dotation";
+  const nomDotation = (id: string) => catalogue?.dotations.find((d) => d.id === id)?.libelle ?? "dotation";
 
   return (
     <div className="ecran">
@@ -96,7 +95,7 @@ export default function Accueil() {
             <p className="libelle">Ma dotation</p>
             <div className="ligne">
               <span className="nom">
-                {maDotation.identifiant}
+                {nomDotation(maDotation.id)}
                 <small>{maDotation.type.replace("_", " ").toLowerCase()}</small>
               </span>
             </div>

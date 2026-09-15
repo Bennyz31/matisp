@@ -51,7 +51,7 @@ export function construirePdf(d: DonneesPdf): jsPDF {
   );
 
   const entete: [string, string][] = [
-    ["Intervention", dateFr(d.debutLe)],
+    ["Date de l'intervention", dateFr(d.debutLe)],
     ["CRSS", d.crss || "non renseigné"],
     ["Déclarants", d.declarants.join(", ") || "—"],
     ["Total", `${total.references} réf. · ${total.unites} u.`],

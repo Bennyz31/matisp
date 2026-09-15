@@ -111,7 +111,7 @@ export default function Saisie() {
     const existante = lignes.get(cle);
     const ligne: ConsommationLocale = existante
       ? { ...existante, quantite, saisiLe: new Date().toISOString(), synchronisee: false }
-      : { ...nouvelleLigne(id, dotationActive, produitId), quantite };
+      : { ...nouvelleLigne(id, dotationActive, produitId, "CONSOMME", `${moi!.prenom} ${moi!.nom}`), quantite };
     await ecrireConsommation(ligne);
     await recharger();
     void synchroniser();
@@ -159,7 +159,7 @@ export default function Saisie() {
                   className={`puce ${dotationActive === did ? "active" : ""}`}
                   onClick={() => setDotationActive(did)}
                 >
-                  {catalogue.dotations.find((d) => d.id === did)?.identifiant ?? "dotation"}
+                  {catalogue.dotations.find((d) => d.id === did)?.libelle ?? "dotation"}
                 </button>
               ))}
             </div>
