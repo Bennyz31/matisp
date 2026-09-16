@@ -231,12 +231,19 @@ select.champ {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 11px;
+  padding: 12px;
   border: 1px solid var(--line);
   border-radius: var(--r);
   background: var(--surface);
   width: 100%;
   text-align: left;
+  /* Les listes longues (tous les produits d'une dotation, l'annuaire des
+     comptes) peuvent compter plusieurs centaines de lignes : on laisse le
+     navigateur sauter le calcul de mise en page des lignes hors écran plutôt
+     que de tout virtualiser à la main. Le navigateur retombe sans risque sur
+     un rendu classique s'il ne connaît pas la propriété. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 64px;
 }
 .ligne.active {
   border-color: var(--vert);
@@ -245,14 +252,14 @@ select.champ {
 .ligne .nom {
   flex: 1;
   min-width: 0;
-  line-height: 1.25;
-  font-size: 15px;
+  line-height: 1.3;
+  font-size: 15.5px;
 }
 .ligne .nom small {
   display: block;
   color: var(--ink-3);
-  font-size: 12px;
-  margin-top: 1px;
+  font-size: 12.5px;
+  margin-top: 2px;
 }
 
 .plus {

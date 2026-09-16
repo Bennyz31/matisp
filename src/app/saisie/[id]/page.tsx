@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { nouvelleLigne, synchroniser } from "@/client/session";
 import {
@@ -78,15 +78,23 @@ export default function Saisie() {
       .sort((a, b) => a.designation.localeCompare(b.designation, "fr"));
   }, [catalogue, dotationActive]);
 
+  /**
+   * La frappe reste instantanée même sur un vieux téléphone et un catalogue
+   * de 700+ produits : le champ garde la valeur tapée immédiatement, mais le
+   * recalcul des résultats (le plus coûteux) est différé d'une frappe si le
+   * téléphone est occupé, au lieu de bloquer chaque caractère.
+   */
+  const requeteDifferee = useDeferredValue(requete);
+
   const resultats = useMemo(
     () =>
-      requete.trim().length >= 1
-        ? chercher(index, requete, {
+      requeteDifferee.trim().length >= 1
+        ? chercher(index, requeteDifferee, {
             frequents: frequents.map((p) => p.id),
             inclureEquipements: avecEquipements,
           })
         : [],
-    [index, requete, frequents, avecEquipements],
+    [index, requeteDifferee, frequents, avecEquipements],
   );
 
   if (moi === undefined || !catalogue) return <Chargement />;
@@ -128,7 +136,7 @@ export default function Saisie() {
     { references: 0, unites: 0 },
   );
 
-  const affiches: ProduitIndexe[] | typeof frequents = requete.trim()
+  const affiches: ProduitIndexe[] | typeof frequents = requeteDifferee.trim()
     ? resultats
     : vue === "tous"
       ? tousProduits
@@ -166,7 +174,7 @@ export default function Saisie() {
           </>
         )}
 
-        {!requete.trim() && (
+        {!requeteDifferee.trim() && (
           <div className="puces">
             <button className={`puce ${vue === "tous" ? "active" : ""}`} onClick={() => setVue("tous")}>
               Tous
@@ -181,7 +189,7 @@ export default function Saisie() {
         )}
 
         <p className="libelle">
-          {requete.trim()
+          {requeteDifferee.trim()
             ? `Résultats (${affiches.length})`
             : vue === "tous"
               ? `Tous les produits (${affiches.length})`
@@ -190,7 +198,7 @@ export default function Saisie() {
 
         {affiches.length === 0 && (
           <p className="note">
-            {requete.trim()
+            {requeteDifferee.trim()
               ? "Rien trouvé. Essaie le nom commercial, la couleur ou le calibre."
               : "Aucun produit dans cette dotation."}
           </p>
@@ -223,7 +231,7 @@ export default function Saisie() {
           );
         })}
 
-        {requete.trim() && !avecEquipements && (
+        {requeteDifferee.trim() && !avecEquipements && (
           <button className="bouton fantome" onClick={() => setAvecEquipements(true)}>
             Inclure le matériel non consommable (perte ou casse)
           </button>
