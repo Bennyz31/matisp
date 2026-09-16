@@ -1,0 +1,12 @@
+# Uniformise les fins de ligne quel que soit le système (Windows/GitHub Desktop
+# convertit sinon en CRLF, ce qui fait apparaître des avertissements de diff
+# "LF -> CRLF" à chaque commit, sans rapport avec le vrai contenu modifié).
+* text=auto eol=lf
+
+# Les binaires ne doivent jamais être touchés par cette conversion.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.xlsx binary
+*.xls binary

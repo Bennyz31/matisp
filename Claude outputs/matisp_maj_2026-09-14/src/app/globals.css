@@ -1,0 +1,415 @@
+:root {
+  --ground: #f4f6f8;
+  --surface: #ffffff;
+  --surface-2: #edeff3;
+  --ink: #171b21;
+  --ink-2: #4a525e;
+  --ink-3: #79828f;
+  --line: #dce0e7;
+  --line-fort: #c3c9d3;
+  --rouge: #c4202d;
+  --rouge-clair: #fbeaeb;
+  --ardoise: #31506f;
+  --ardoise-clair: #e7edf4;
+  --ambre: #9a5b08;
+  --ambre-clair: #fbf0de;
+  --vert: #1f6b4e;
+  --vert-clair: #e2f0ea;
+  --r: 10px;
+  color-scheme: light;
+}
+
+/* Mode sombre : automatique selon le système, ou forcé par [data-theme]
+   (réglage dans « Mon compte », persisté sur l'appareil). */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #12151a;
+    --surface: #1a1f26;
+    --surface-2: #232a33;
+    --ink: #eef1f4;
+    --ink-2: #aab3c0;
+    --ink-3: #7c8797;
+    --line: #2b323c;
+    --line-fort: #3a4451;
+    --rouge: #e6555f;
+    --rouge-clair: #3a2024;
+    --ardoise: #4d7ba8;
+    --ardoise-clair: #1c2a38;
+    --ambre: #d9a13f;
+    --ambre-clair: #362a15;
+    --vert: #4fb389;
+    --vert-clair: #17301f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --ground: #12151a;
+  --surface: #1a1f26;
+  --surface-2: #232a33;
+  --ink: #eef1f4;
+  --ink-2: #aab3c0;
+  --ink-3: #7c8797;
+  --line: #2b323c;
+  --line-fort: #3a4451;
+  --rouge: #e6555f;
+  --rouge-clair: #3a2024;
+  --ardoise: #4d7ba8;
+  --ardoise-clair: #1c2a38;
+  --ambre: #d9a13f;
+  --ambre-clair: #362a15;
+  --vert: #4fb389;
+  --vert-clair: #17301f;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.45;
+  overscroll-behavior-y: none;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+  border: 0;
+  background: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ardoise);
+  outline-offset: 2px;
+}
+
+.ecran {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  max-width: 620px;
+  margin: 0 auto;
+  background: var(--ground);
+}
+
+/* ------------------------------------------------------------ barre haute */
+.barre {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  padding-top: max(12px, env(safe-area-inset-top));
+  background: var(--ardoise);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 600;
+}
+.barre .retour {
+  font-size: 24px;
+  line-height: 1;
+  opacity: 0.85;
+  padding: 0 4px;
+  color: #fff;
+}
+.barre .etat {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  opacity: 0.9;
+  text-transform: uppercase;
+}
+.barre .etat.hors-ligne {
+  background: rgba(255, 255, 255, 0.18);
+  padding: 3px 8px;
+  border-radius: 20px;
+}
+
+.corps {
+  flex: 1;
+  padding: 14px;
+  padding-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ------------------------------------------------------------- éléments */
+.libelle {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--ink-3);
+  font-weight: 600;
+  margin: 6px 0 -4px;
+}
+
+.champ,
+select.champ {
+  width: 100%;
+  padding: 13px 12px;
+  border: 1px solid var(--line-fort);
+  border-radius: var(--r);
+  background: var(--surface);
+  font-size: 16px; /* en dessous de 16 px, iOS zoome au focus */
+}
+
+.bouton {
+  display: block;
+  width: 100%;
+  padding: 15px;
+  border-radius: var(--r);
+  background: var(--rouge);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+}
+.bouton:disabled {
+  opacity: 0.45;
+}
+.bouton.ardoise {
+  background: var(--ardoise);
+}
+.bouton.fantome {
+  background: transparent;
+  color: var(--ardoise);
+  border: 1px solid var(--line-fort);
+}
+.bouton.gros {
+  padding: 20px;
+  font-size: 18px;
+}
+
+.note {
+  font-size: 13px;
+  color: var(--ink-3);
+  line-height: 1.4;
+}
+
+.erreur {
+  background: var(--rouge-clair);
+  color: var(--rouge);
+  padding: 11px 13px;
+  border-radius: var(--r);
+  font-size: 14px;
+}
+.succes {
+  background: var(--vert-clair);
+  color: var(--vert);
+  padding: 11px 13px;
+  border-radius: var(--r);
+  font-size: 14px;
+}
+.avertissement {
+  background: var(--ambre-clair);
+  color: var(--ambre);
+  padding: 11px 13px;
+  border-radius: var(--r);
+  font-size: 14px;
+}
+
+/* --------------------------------------------------------------- lignes */
+.ligne {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface);
+  width: 100%;
+  text-align: left;
+}
+.ligne.active {
+  border-color: var(--vert);
+  background: var(--vert-clair);
+}
+.ligne .nom {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.25;
+  font-size: 15px;
+}
+.ligne .nom small {
+  display: block;
+  color: var(--ink-3);
+  font-size: 12px;
+  margin-top: 1px;
+}
+
+.plus {
+  flex: none;
+  width: 46px;
+  height: 46px;
+  border-radius: var(--r);
+  background: var(--rouge);
+  color: #fff;
+  font-size: 26px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+}
+
+.compteur {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+.compteur button {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  border: 1px solid var(--line-fort);
+  background: var(--surface);
+  font-size: 22px;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+}
+.compteur b {
+  min-width: 30px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-size: 17px;
+}
+
+/* --------------------------------------------------------------- divers */
+.puces {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.puce {
+  border: 1px solid var(--line-fort);
+  border-radius: 22px;
+  padding: 9px 15px;
+  font-size: 15px;
+  background: var(--surface);
+  color: var(--ink-2);
+}
+.puce.active {
+  background: var(--ardoise);
+  color: #fff;
+  border-color: var(--ardoise);
+}
+
+.etiquette {
+  flex: none;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  letter-spacing: 0.04em;
+  font-weight: 600;
+}
+.et-brouillon {
+  background: var(--surface-2);
+  color: var(--ink-3);
+}
+.et-envoyer {
+  background: var(--ambre-clair);
+  color: var(--ambre);
+}
+.et-fait {
+  background: var(--vert-clair);
+  color: var(--vert);
+}
+
+.titre-bloc {
+  font-size: 16px;
+  font-weight: 700;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 4px;
+  margin: 12px 0 2px;
+}
+.recap {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 15px;
+  padding: 4px 0;
+}
+.recap b {
+  font-variant-numeric: tabular-nums;
+}
+
+.pied {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  padding-bottom: max(11px, env(safe-area-inset-bottom));
+  background: var(--surface-2);
+  border-top: 1px solid var(--line-fort);
+}
+.pied .total {
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.pied .terminer {
+  margin-left: auto;
+  background: var(--rouge);
+  color: #fff;
+  padding: 11px 20px;
+  border-radius: var(--r);
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.centre {
+  display: grid;
+  place-items: center;
+  min-height: 60dvh;
+  color: var(--ink-3);
+  font-size: 15px;
+  text-align: center;
+  padding: 20px;
+}
+
+table.tableau {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+table.tableau th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+  border-bottom: 1px solid var(--line-fort);
+  padding: 8px 6px;
+}
+table.tableau td {
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ligne,
+  .puce,
+  .bouton {
+    transition: background-color 0.12s ease, border-color 0.12s ease;
+  }
+}
