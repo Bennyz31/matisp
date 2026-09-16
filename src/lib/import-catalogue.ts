@@ -339,14 +339,37 @@ export async function importerCatalogue(fichier: ArrayBuffer): Promise<ResultatI
       }),
     );
 
+    /**
+     * Un code de dotation individuelle ne doit être réclamé que par un seul
+     * compte : deux comptes pointant sur le même code (erreur de saisie dans
+     * l'onglet, cf. Alaux/Blonstein sur SAC_MED_BLONSTEIN le 16/09/2026)
+     * lançaient auparavant deux `update` en parallèle, et le dernier à finir
+     * gagnait silencieusement — sans avertissement, sans garantie d'ordre.
+     * Le regroupement ci-dessous détecte le conflit et laisse le detenteur
+     * actuel intact plutôt que de deviner.
+     */
+    const parCodeDotation = new Map<string, { matricule: string; nom: string; utilisateurId: string }[]>();
+    for (const { utilisateur, codeDotation } of resultats) {
+      if (!codeDotation) continue;
+      const liste = parCodeDotation.get(codeDotation) ?? [];
+      liste.push({ matricule: utilisateur.matricule, nom: utilisateur.nom, utilisateurId: utilisateur.id });
+      parCodeDotation.set(codeDotation, liste);
+    }
+
     await Promise.all(
-      resultats
-        .filter((r) => r.codeDotation)
-        .map((r) =>
-          prisma.dotation
-            .update({ where: { identifiant: r.codeDotation }, data: { detenteurId: r.utilisateur.id } })
-            .catch(() => undefined),
-        ),
+      Array.from(parCodeDotation.entries()).map(([codeDotation, claimants]) => {
+        if (claimants.length > 1) {
+          avertissements.push(
+            `Dotation « ${codeDotation} » réclamée par plusieurs comptes (${claimants
+              .map((c) => `${c.nom} #${c.matricule}`)
+              .join(", ")}) : detenteur non modifié, à corriger dans le classeur.`,
+          );
+          return undefined;
+        }
+        return prisma.dotation
+          .update({ where: { identifiant: codeDotation }, data: { detenteurId: claimants[0].utilisateurId } })
+          .catch(() => undefined);
+      }),
     );
     utilisateurs = resultats.length;
   }
