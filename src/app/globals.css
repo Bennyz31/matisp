@@ -308,10 +308,12 @@ select.champ {
 .puce {
   border: 1px solid var(--line-fort);
   border-radius: 22px;
-  padding: 9px 15px;
+  padding: 10px 16px;
   font-size: 15px;
+  font-weight: 500;
   background: var(--surface);
-  color: var(--ink-2);
+  color: var(--ink);
+  white-space: nowrap;
 }
 .puce.active {
   background: var(--ardoise);
