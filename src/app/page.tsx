@@ -63,7 +63,7 @@ export default function Accueil() {
 
   return (
     <div className="ecran">
-      <Barre titre={`Bonjour ${moi.prenom}`} />
+      <Barre titre={`Bonjour ${moi.prenom || moi.nom}`} />
       <div className="corps">
         {moi.motDePasseParDefaut && (
           <button

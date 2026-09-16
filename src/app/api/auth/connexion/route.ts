@@ -2,6 +2,7 @@ import { z } from "zod";
 import { prisma, journaliser } from "@/lib/db";
 import { ErreurHttp, signerJeton, verifierMotDePasse } from "@/lib/auth";
 import { gerer } from "@/lib/reponse";
+import { nomComplet } from "@/lib/personne";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +28,7 @@ export const POST = (req: Request) =>
       jeton: await signerJeton({
         sub: utilisateur.id,
         fonction: utilisateur.fonction,
-        nom: `${utilisateur.prenom} ${utilisateur.nom}`,
+        nom: nomComplet(utilisateur.prenom, utilisateur.nom),
         admin: utilisateur.admin,
         accesVLM: utilisateur.accesVLM,
       }),

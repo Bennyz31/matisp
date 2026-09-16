@@ -23,6 +23,15 @@ const dateFr = (iso: string) =>
     timeZone: "Europe/Paris",
   }).format(new Date(iso));
 
+/// Décision du 16/09/2026 (Ben) : la date de l'intervention et l'heure de
+/// saisie se lisaient comme une seule valeur, prêtant à confusion (ce n'est
+/// pas forcément la même chose — la saisie peut se faire après coup). Séparées
+/// en deux lignes distinctes dans l'en-tête du PDF.
+const dateSeuleFr = (iso: string) =>
+  new Intl.DateTimeFormat("fr-FR", { dateStyle: "long", timeZone: "Europe/Paris" }).format(new Date(iso));
+const heureSeuleFr = (iso: string) =>
+  new Intl.DateTimeFormat("fr-FR", { timeStyle: "short", timeZone: "Europe/Paris" }).format(new Date(iso));
+
 /**
  * Le PDF est fabriqué sur le téléphone : il existe donc aussi hors connexion,
  * et le document vu à l'aperçu est exactement celui qui part par mail.
@@ -37,7 +46,7 @@ export function construirePdf(d: DonneesPdf): jsPDF {
   doc.text(d.crss ? `MATISP — liste de réassort — ${d.crss}` : "MATISP — liste de réassort", marge, y);
   y += 6;
   doc.setFont("helvetica", "normal").setFontSize(9.5).setTextColor(74, 82, 94);
-  doc.text("SDIS 82 · Service de santé et de secours médical", marge, y);
+  doc.text("SDIS 82 · Sous-direction santé", marge, y);
   y += 3;
   doc.setDrawColor(20, 24, 31).setLineWidth(0.5).line(marge, y, 210 - marge, y);
   y += 8;
@@ -51,15 +60,20 @@ export function construirePdf(d: DonneesPdf): jsPDF {
   );
 
   const entete: [string, string][] = [
-    ["Date de l'intervention", dateFr(d.debutLe)],
+    ["Date de l'intervention", dateSeuleFr(d.debutLe)],
+    ["Heure de saisie", heureSeuleFr(d.debutLe)],
     ["CRSS", d.crss || "non renseigné"],
     ["Déclarants", d.declarants.join(", ") || "—"],
     ["Total", `${total.references} réf. · ${total.unites} u.`],
   ];
   doc.setFontSize(8);
+  // Décalage mesuré sur le plus long intitulé (« DATE DE L'INTERVENTION » =
+  // 35,6 mm à cette taille de police) : 34 mm le faisait chevaucher la valeur
+  // (bug constaté par Ben sur un PDF réel le 16/09/2026).
+  const colonneValeur = marge + 40;
   for (const [etiquette, valeur] of entete) {
     doc.setTextColor(121, 130, 143).text(etiquette.toUpperCase(), marge, y);
-    doc.setFontSize(10).setTextColor(20, 24, 31).text(valeur, marge + 34, y);
+    doc.setFontSize(10).setTextColor(20, 24, 31).text(valeur, colonneValeur, y);
     doc.setFontSize(8);
     y += 5.5;
   }

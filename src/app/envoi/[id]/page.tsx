@@ -14,6 +14,7 @@ import {
 } from "@/client/stockage";
 import { construirePdf, nomFichierPdf, pdfEnBase64, type DonneesPdf } from "@/client/pdf";
 import { Barre, Chargement, useEnLigne, useProfil } from "@/client/ui";
+import { nomComplet } from "@/lib/personne";
 
 /** Forme renvoyée par GET /api/interventions/:id/reassort (voir src/lib/reassort.ts). */
 type ReassortServeur = {
@@ -99,7 +100,7 @@ function construireDonnees(
   return {
     crss: intervention.crss,
     debutLe: intervention.debutLe,
-    declarants: tousAuteurs.size > 0 ? [...tousAuteurs] : [`${moi.prenom} ${moi.nom} (${moi.fonction})`],
+    declarants: tousAuteurs.size > 0 ? [...tousAuteurs] : [`${nomComplet(moi.prenom, moi.nom)} (${moi.fonction})`],
     blocs: [...parDotation.entries()].map(([dotationId, liste]) => {
       const groupes = grouperParProduit(liste)
         .map((g) => ({ ...g, p: g.l.produitId ? parProduit.get(g.l.produitId) : undefined }))
@@ -113,7 +114,7 @@ function construireDonnees(
         // Identifiant brut (pas « Mon sac ») : ce document est lu par un tiers
         // (pharmacie), pas seulement par son auteur.
         dotation: catalogue.dotations.find((d) => d.id === dotationId)?.identifiant ?? "Dotation",
-        declarants: declarantsBloc.size > 0 ? [...declarantsBloc] : [`${moi.prenom} ${moi.nom}`],
+        declarants: declarantsBloc.size > 0 ? [...declarantsBloc] : [nomComplet(moi.prenom, moi.nom)],
         lignes: groupes.map(({ l, total, p }) => ({
           code: p?.code ?? "—",
           designation: p?.designation ?? l.nomLibre ?? "Produit inconnu",

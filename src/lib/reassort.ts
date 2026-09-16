@@ -1,4 +1,5 @@
 import { prisma } from "./db";
+import { nomComplet } from "./personne";
 
 
 export type LigneReassort = {
@@ -70,7 +71,7 @@ export async function calculerReassort(interventionId: string): Promise<Reassort
       };
       parDotation.set(c.dotationId, bloc);
     }
-    const nomDeclarant = `${c.utilisateur.prenom} ${c.utilisateur.nom}`;
+    const nomDeclarant = nomComplet(c.utilisateur.prenom, c.utilisateur.nom);
     if (!bloc.declarants.includes(nomDeclarant)) bloc.declarants.push(nomDeclarant);
 
     // Un produit du catalogue se reconnaît à son id ; un produit hors
@@ -117,7 +118,7 @@ export async function calculerReassort(interventionId: string): Promise<Reassort
     finLe: intervention.finLe,
     statut: intervention.statut,
     declarants: intervention.utilisateurs.map((u) => ({
-      nom: `${u.utilisateur.prenom} ${u.utilisateur.nom}`,
+      nom: nomComplet(u.utilisateur.prenom, u.utilisateur.nom),
       fonction: u.utilisateur.fonction,
     })),
     blocs,

@@ -2,6 +2,7 @@ import * as XLSX from "xlsx";
 import type { CategorieProduit, Fonction, TypeDotation } from "@prisma/client";
 import { prisma, bumpVersionCatalogue } from "./db";
 import { hacher } from "./auth";
+import { nomComplet } from "./personne";
 
 /**
  * Import du catalogue depuis le classeur validé, déclenché par l'écran
@@ -332,7 +333,7 @@ export async function importerCatalogue(fichier: ArrayBuffer): Promise<ResultatI
 
         if (estAdmin) {
           avertissements.push(
-            `${utilisateur.prenom} ${utilisateur.nom} a reçu le rôle administrateur (premier compte créé).`,
+            `${nomComplet(utilisateur.prenom, utilisateur.nom)} a reçu le rôle administrateur (premier compte créé).`,
           );
         }
         return { utilisateur, codeDotation: texte(l["DOTATION HABITUELLE"]) };

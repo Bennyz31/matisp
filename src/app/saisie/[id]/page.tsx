@@ -15,6 +15,7 @@ import {
 } from "@/client/stockage";
 import { chercher, indexer, type ProduitIndexe } from "@/client/recherche";
 import { Barre, Chargement, Compteur, useProfil } from "@/client/ui";
+import { nomComplet } from "@/lib/personne";
 
 export default function Saisie() {
   const router = useRouter();
@@ -133,7 +134,7 @@ export default function Saisie() {
     const existante = lignes.get(cle);
     const ligne: ConsommationLocale = existante
       ? { ...existante, quantite, saisiLe: new Date().toISOString(), synchronisee: false }
-      : { ...nouvelleLigne(id, dotationActive, produitId, "CONSOMME", `${moi!.prenom} ${moi!.nom}`), quantite };
+      : { ...nouvelleLigne(id, dotationActive, produitId, "CONSOMME", nomComplet(moi!.prenom, moi!.nom)), quantite };
     await ecrireConsommation(ligne);
     await recharger();
     void synchroniser();
@@ -163,7 +164,7 @@ export default function Saisie() {
       await ajusterLibre(existante, existante.quantite + 1);
     } else {
       const ligne = {
-        ...nouvelleLigne(id, dotationActive, null, "CONSOMME", `${moi!.prenom} ${moi!.nom}`, propre),
+        ...nouvelleLigne(id, dotationActive, null, "CONSOMME", nomComplet(moi!.prenom, moi!.nom), propre),
         quantite: 1,
       };
       await ecrireConsommation(ligne);

@@ -14,6 +14,7 @@ import {
   type ConsommationLocale,
   type InterventionLocale,
 } from "./stockage";
+import { nomComplet } from "@/lib/personne";
 
 const CLE_JETON = "matisp.jeton";
 const CLE_PROFIL = "matisp.profil";
@@ -308,7 +309,7 @@ async function rapatrier(): Promise<void> {
       commentaire: c.commentaire,
       saisiLe: c.saisiLe,
       synchronisee: true,
-      auteur: `${c.utilisateur.prenom} ${c.utilisateur.nom}`,
+      auteur: nomComplet(c.utilisateur.prenom, c.utilisateur.nom),
     });
   }
 

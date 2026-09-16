@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { exigerUtilisateur } from "@/lib/auth";
 import { gerer } from "@/lib/reponse";
+import { nomComplet } from "@/lib/personne";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,7 @@ export const GET = (req: Request) =>
         statut: i.statut,
         verrouilleeLe: i.verrouilleeLe,
         dotations: i.dotations.map((d) => d.dotation.identifiant),
-        declarants: i.utilisateurs.map((u) => `${u.utilisateur.prenom} ${u.utilisateur.nom}`),
+        declarants: i.utilisateurs.map((u) => nomComplet(u.utilisateur.prenom, u.utilisateur.nom)),
         // Un produit hors catalogue (produitId vide) se distingue par son nom
         // libre, sinon plusieurs produits différents saisis à la main se
         // compteraient comme une seule référence.

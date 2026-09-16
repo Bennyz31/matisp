@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, fermerSession, mettreAJourProfil, rafraichirCatalogue, synchroniser } from "@/client/session";
 import { Barre, Chargement, useProfil, useTheme, type Theme } from "@/client/ui";
+import { nomComplet } from "@/lib/personne";
 
 export default function Profil() {
   const router = useRouter();
@@ -64,7 +65,7 @@ export default function Profil() {
       <div className="corps">
         <div className="ligne">
           <span className="nom">
-            {moi.prenom} {moi.nom}
+            {nomComplet(moi.prenom, moi.nom)}
             <small>
               {moi.fonction}
               {moi.dotations.length > 0
