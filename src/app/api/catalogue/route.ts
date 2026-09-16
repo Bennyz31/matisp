@@ -10,6 +10,16 @@ export const dynamic = "force-dynamic";
  * façon de tenir « 1 à 2 secondes » avec un réseau médiocre ou absent.
  */
 /**
+ * À incrémenter à la main chaque fois que la FORME de l'objet retourné change
+ * (nouveau champ, filtrage différent, etc.), même sans ré-import du fichier.
+ * `version` (en base) ne bouge qu'à un ré-import : sans ce second compteur,
+ * un téléphone qui a déjà mis l'ancien catalogue en cache ne verrait jamais
+ * les libellés/le filtrage ajoutés le 14/09/2026 (bug constaté par Ben —
+ * pastilles de dotation vides — corrigé ici : ce bump force un rafraîchissement
+ * une seule fois pour tout le monde).
+ */
+const SCHEMA_CATALOGUE = 2;
+/**
  * Visibilité des dotations par profil (décision du 14/09/2026, Ben) :
  * - ISP : dotation ISP + VLM (si accès VLM).
  * - MSP (médecin) : dotation ISP + sa dotation médecin personnelle (ou la
@@ -103,5 +113,13 @@ export const GET = (req: Request) =>
       .sort((a, b) => a.ordre - b.ordre)
       .map(({ ordre: _ordre, ...d }) => d);
 
-    return { version, produits, modeles, dotations: dotationsVisibles, destinataires, cis };
+    return {
+      version,
+      schemaVersion: SCHEMA_CATALOGUE,
+      produits,
+      modeles,
+      dotations: dotationsVisibles,
+      destinataires,
+      cis,
+    };
   });

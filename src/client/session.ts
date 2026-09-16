@@ -118,12 +118,12 @@ export async function api<T>(chemin: string, options: RequestInit = {}): Promise
 
 // ------------------------------------------------------------- catalogue
 
-/** Télécharge le catalogue s'il a changé. Silencieux hors connexion. */
+/** Télécharge le catalogue s'il a changé (contenu OU forme). Silencieux hors connexion. */
 export async function rafraichirCatalogue(): Promise<Catalogue | undefined> {
   const cache = await lireCatalogue();
   try {
     const frais = await api<Catalogue>("/catalogue");
-    if (!cache || frais.version !== cache.version) {
+    if (!cache || frais.version !== cache.version || frais.schemaVersion !== cache.schemaVersion) {
       await ecrireCatalogue(frais);
       return frais;
     }

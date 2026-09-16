@@ -101,6 +101,12 @@ export type Destinataire = { id: string; libelle: string; email: string; cochePa
 
 export type Catalogue = {
   version: number;
+  /** Incrémenté à la main côté serveur à chaque changement de FORME du
+   * catalogue (ex. ajout de `libelle`) — indépendant de `version`, qui ne
+   * bouge qu'au ré-import du fichier Excel. Sans ça, un téléphone qui a déjà
+   * mis le catalogue en cache ne verrait jamais la nouvelle forme tant que
+   * personne ne réimporte, même après une mise à jour de l'appli. */
+  schemaVersion: number;
   produits: Produit[];
   modeles: Modele[];
   dotations: Dotation[];
