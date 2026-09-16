@@ -28,7 +28,23 @@ const CATEGORIES: Record<string, CategorieProduit> = {
 };
 
 const TYPES: Record<string, TypeDotation> = { SAC_ISP: "SAC_ISP", SAC_MED: "SAC_MED", VLM: "VLM" };
-const FONCTIONS = ["ISP", "MSP", "CONDUCTEUR", "PHARMACIEN", "ADMIN"] as const;
+/**
+ * Le classeur écrit la fonction en clair (« MEDECIN »), le code n'acceptait
+ * jusqu'ici que le sigle de l'énum (« MSP ») : les 16 médecins du classeur
+ * (dont Ben) tombaient donc tous dans le « ISP par défaut » ci-dessous, sans
+ * avertissement voyant puisqu'un ISP est une valeur valide en soi (bug
+ * découvert le 16/09/2026 — pastille « Mon sac » disparue chez Ben après un
+ * ré-import). Alias tolérant à l'accent et à la casse.
+ */
+const FONCTIONS_ALIAS: Record<string, Fonction> = {
+  ISP: "ISP",
+  MSP: "MSP",
+  MEDECIN: "MSP",
+  "MÉDECIN": "MSP",
+  CONDUCTEUR: "CONDUCTEUR",
+  PHARMACIEN: "PHARMACIEN",
+  ADMIN: "ADMIN",
+};
 /// Accès VLM (SMUR sapeurs-pompiers) accordé par défaut à tous les ISP, plus ces
 /// trois matricules nommément désignés par Ben (Blonstein, Pereira, Alaux).
 /// Provisoire : la V2 prévoit des droits plus fins par profil (ISP / ISP VLM /
@@ -278,9 +294,10 @@ export async function importerCatalogue(fichier: ArrayBuffer): Promise<ResultatI
     const resultats = await Promise.all(
       lignesUtil.map(async ({ l, matricule, nom }, rang) => {
         const brute = texte(l["FONCTION"]).toUpperCase();
-        const connue = (FONCTIONS as readonly string[]).includes(brute);
-        const fonction = connue ? (brute as Fonction) : "ISP";
-        if (!connue) avertissements.push(`Fonction « ${brute} » inconnue pour ${nom} : ISP par défaut.`);
+        const fonction: Fonction = FONCTIONS_ALIAS[brute] ?? "ISP";
+        if (!FONCTIONS_ALIAS[brute]) {
+          avertissements.push(`Fonction « ${brute} » inconnue pour ${nom} : ISP par défaut.`);
+        }
 
         const cisId = cisParCode.get(texte(l["CIS"])) ?? null;
         const actif = texte(l["ACTIF"]) === "" ? true : oui(l["ACTIF"]);
