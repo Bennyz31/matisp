@@ -13,6 +13,7 @@ type Etat = {
   utilisateurs: number;
   destinataires: number;
   aVerifier: number;
+  horsCatalogue: number;
   messagerieConfiguree: boolean;
 };
 
@@ -181,6 +182,12 @@ export default function Admin() {
               <td>Produits marqués « à vérifier »</td>
               <td style={{ textAlign: "right" }}>
                 <b>{etat.aVerifier}</b>
+              </td>
+            </tr>
+            <tr>
+              <td>Déclarations hors catalogue</td>
+              <td style={{ textAlign: "right" }}>
+                <b>{etat.horsCatalogue}</b>
               </td>
             </tr>
             <tr>

@@ -2,7 +2,7 @@ import { prisma } from "./db";
 
 
 export type LigneReassort = {
-  produitId: string;
+  produitId: string | null;
   code: string;
   designation: string;
   gamme: string | null;
@@ -10,6 +10,9 @@ export type LigneReassort = {
   quantite: number;
   type: "CONSOMME" | "PERDU" | "CASSE";
   commentaire: string | null;
+  /// Vrai quand le produit n'est pas au catalogue (voir Consommation.nomLibre) :
+  /// code/gamme/unité sont alors des espaces réservés, à ignorer.
+  horsCatalogue: boolean;
 };
 
 export type BlocReassort = {
@@ -70,7 +73,13 @@ export async function calculerReassort(interventionId: string): Promise<Reassort
     const nomDeclarant = `${c.utilisateur.prenom} ${c.utilisateur.nom}`;
     if (!bloc.declarants.includes(nomDeclarant)) bloc.declarants.push(nomDeclarant);
 
-    const existante = bloc.lignes.find((l) => l.produitId === c.produitId && l.type === c.type);
+    // Un produit du catalogue se reconnaît à son id ; un produit hors
+    // catalogue (produitId vide) se reconnaît à son nom libre, au cas où il
+    // serait déclaré plusieurs fois dans la même intervention.
+    const cle = c.produitId ?? `libre:${(c.nomLibre ?? "").trim().toLowerCase()}`;
+    const cleDe = (l: LigneReassort) =>
+      l.produitId ?? `libre:${l.designation.trim().toLowerCase()}`;
+    const existante = bloc.lignes.find((l) => cleDe(l) === cle && l.type === c.type);
     if (existante) {
       existante.quantite += c.quantite;
       if (c.commentaire) {
@@ -81,13 +90,14 @@ export async function calculerReassort(interventionId: string): Promise<Reassort
     } else {
       bloc.lignes.push({
         produitId: c.produitId,
-        code: c.produit.code,
-        designation: c.produit.designation,
-        gamme: c.produit.gamme,
-        unite: c.produit.unite,
+        code: c.produit?.code ?? "—",
+        designation: c.produit?.designation ?? c.nomLibre ?? "Produit inconnu",
+        gamme: c.produit?.gamme ?? null,
+        unite: c.produit?.unite ?? "unité",
         quantite: c.quantite,
         type: c.type,
         commentaire: c.commentaire,
+        horsCatalogue: !c.produitId,
       });
     }
   }

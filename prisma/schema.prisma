@@ -272,8 +272,14 @@ model Consommation {
   utilisateur    Utilisateur      @relation(fields: [utilisateurId], references: [id])
   dotationId     String
   dotation       Dotation         @relation(fields: [dotationId], references: [id])
-  produitId      String
-  produit        Produit          @relation(fields: [produitId], references: [id])
+  /// Facultatif : vide quand le produit n'est pas encore au catalogue, auquel
+  /// cas `nomLibre` porte le nom saisi à la main sur le terrain (décision du
+  /// 16/09/2026 — l'appli ne doit jamais bloquer une saisie faute de fiche
+  /// catalogue). Le catalogue reste la seule source de vérité éditoriale :
+  /// personne n'y ajoute rien tant que Ben ne l'a pas intégré via le classeur.
+  produitId      String?
+  produit        Produit?         @relation(fields: [produitId], references: [id])
+  nomLibre       String?
   quantite       Int
   type           TypeConsommation @default(CONSOMME)
   commentaire    String?

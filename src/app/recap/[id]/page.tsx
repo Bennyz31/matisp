@@ -53,20 +53,30 @@ export default function Recapitulatif() {
     }
     return [...parDotation.entries()].map(([dotationId, liste]) => {
       // Un même produit peut avoir une ligne par déclarant (même dotation
-      // partagée) : on additionne pour n'afficher qu'un seul total.
+      // partagée) : on additionne pour n'afficher qu'un seul total. Un
+      // produit hors catalogue (produitId vide) se distingue par son nom
+      // libre plutôt que par un id, pour ne pas fusionner deux produits
+      // différents saisis à la main dans la même intervention.
       const groupes = new Map<string, ConsommationLocale & { produit: Produit | undefined }>();
       for (const l of liste) {
-        const cle = `${l.produitId}|${l.type}`;
+        const cle = l.produitId
+          ? `${l.produitId}|${l.type}`
+          : `libre:${(l.nomLibre ?? "").trim().toLowerCase()}|${l.type}`;
         const existant = groupes.get(cle);
         if (existant) existant.quantite += l.quantite;
-        else groupes.set(cle, { ...l, produit: parProduit.get(l.produitId) });
+        else groupes.set(cle, { ...l, produit: l.produitId ? parProduit.get(l.produitId) : undefined });
       }
       return {
         dotationId,
         nom: catalogue.dotations.find((d) => d.id === dotationId)?.libelle ?? "Dotation",
         lignes: [...groupes.values()]
-          .filter((l) => l.produit)
-          .sort((a, b) => a.produit!.designation.localeCompare(b.produit!.designation, "fr")),
+          .filter((l) => l.produit || l.nomLibre)
+          .sort((a, b) =>
+            (a.produit?.designation ?? a.nomLibre ?? "").localeCompare(
+              b.produit?.designation ?? b.nomLibre ?? "",
+              "fr",
+            ),
+          ),
       };
     });
   }, [catalogue, lignes]);
@@ -113,7 +123,12 @@ export default function Recapitulatif() {
             {bloc.lignes.map((l) => (
               <div key={l.id} className="recap">
                 <span>
-                  {l.produit!.designation}
+                  {l.produit?.designation ?? l.nomLibre}
+                  {!l.produit && (
+                    <span className="etiquette et-envoyer" style={{ marginLeft: 6 }}>
+                      hors catalogue
+                    </span>
+                  )}
                   {l.type !== "CONSOMME" && (
                     <span className="etiquette et-envoyer" style={{ marginLeft: 6 }}>
                       {l.type === "PERDU" ? "perdu" : "cassé"}
@@ -121,7 +136,7 @@ export default function Recapitulatif() {
                   )}
                 </span>
                 <b>
-                  {l.quantite} {l.produit!.unite}
+                  {l.quantite} {l.produit?.unite ?? "unité"}
                 </b>
               </div>
             ))}

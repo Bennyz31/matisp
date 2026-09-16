@@ -55,8 +55,19 @@ export default function Saisie() {
     const modele = catalogue.modeles.find((m) => m.id === dotation?.modeleId);
     if (!modele) return [];
     const parId = new Map(catalogue.produits.map((p) => [p.id, p]));
-    return modele.lignes
-      .map((l) => ({ produit: parId.get(l.produitId), quantite: l.quantiteTheorique }))
+    // Un même produit peut être listé à plusieurs emplacements d'une même
+    // dotation (informatif en V1, cf. schéma) : on ne le compte qu'une fois
+    // ici, avec la plus grande quantité théorique connue — sinon deux lignes
+    // du même produit se disputent une place dans les 24 favoris.
+    const quantiteParProduit = new Map<string, number>();
+    for (const l of modele.lignes) {
+      quantiteParProduit.set(
+        l.produitId,
+        Math.max(quantiteParProduit.get(l.produitId) ?? 0, l.quantiteTheorique),
+      );
+    }
+    return [...quantiteParProduit.entries()]
+      .map(([produitId, quantite]) => ({ produit: parId.get(produitId), quantite }))
       .filter((l) => l.produit?.estConsommable)
       .sort((a, b) => b.quantite - a.quantite)
       .slice(0, 24)
@@ -72,8 +83,11 @@ export default function Saisie() {
     const modele = catalogue.modeles.find((m) => m.id === dotation?.modeleId);
     if (!modele) return [];
     const parId = new Map(catalogue.produits.map((p) => [p.id, p]));
-    return modele.lignes
-      .map((l) => parId.get(l.produitId))
+    // Même remarque que ci-dessus : un produit à plusieurs emplacements ne
+    // doit apparaître qu'une fois dans la liste.
+    const idsUniques = new Set(modele.lignes.map((l) => l.produitId));
+    return [...idsUniques]
+      .map((id) => parId.get(id))
       .filter((p): p is NonNullable<typeof p> => Boolean(p?.estConsommable))
       .sort((a, b) => a.designation.localeCompare(b.designation, "fr"));
   }, [catalogue, dotationActive]);
@@ -127,6 +141,44 @@ export default function Saisie() {
 
   const quantite = (produitId: string) =>
     dotationActive ? (lignes.get(cleLigne(dotationActive, produitId))?.quantite ?? 0) : 0;
+
+  /**
+   * Produit absent du catalogue : jamais bloquant (décision du 16/09/2026).
+   * Créé avec `produitId` vide et son nom tel quel — à intégrer au catalogue
+   * après coup, ça reste visible comme tel jusqu'au bout (récap, PDF).
+   */
+  async function ajusterLibre(ligne: ConsommationLocale, quantite: number) {
+    await ecrireConsommation({ ...ligne, quantite, saisiLe: new Date().toISOString(), synchronisee: false });
+    await recharger();
+    void synchroniser();
+  }
+
+  async function ajouterLibre(nom: string) {
+    if (!dotationActive) return;
+    const propre = nom.trim();
+    if (!propre) return;
+    const cle = cleLigne(dotationActive, null, "CONSOMME", propre);
+    const existante = lignes.get(cle);
+    if (existante) {
+      await ajusterLibre(existante, existante.quantite + 1);
+    } else {
+      const ligne = {
+        ...nouvelleLigne(id, dotationActive, null, "CONSOMME", `${moi!.prenom} ${moi!.nom}`, propre),
+        quantite: 1,
+      };
+      await ecrireConsommation(ligne);
+      await recharger();
+      void synchroniser();
+    }
+    setRequete("");
+  }
+
+  // Pas de useMemo ici : cette portion du corps de fonction ne s'exécute
+  // qu'après les retours anticipés ci-dessus, donc après tous les hooks —
+  // même construction que `totaux`/`affiches` un peu plus bas.
+  const lignesLibresActives = [...lignes.values()]
+    .filter((l) => l.dotationId === dotationActive && !l.produitId)
+    .sort((a, b) => (a.nomLibre ?? "").localeCompare(b.nomLibre ?? "", "fr"));
 
   const totaux = [...lignes.values()].reduce(
     (acc, l) => ({
@@ -230,6 +282,27 @@ export default function Saisie() {
             </div>
           );
         })}
+
+        {lignesLibresActives.length > 0 && (
+          <>
+            <p className="libelle">Hors catalogue</p>
+            {lignesLibresActives.map((l) => (
+              <div key={l.id} className="ligne active">
+                <span className="nom">
+                  {l.nomLibre}
+                  <small>à intégrer au catalogue</small>
+                </span>
+                <Compteur valeur={l.quantite} onChange={(v) => void ajusterLibre(l, v)} />
+              </div>
+            ))}
+          </>
+        )}
+
+        {requeteDifferee.trim() && (
+          <button className="bouton fantome" onClick={() => void ajouterLibre(requeteDifferee)}>
+            Ajouter « {requeteDifferee.trim()} » — absent du catalogue
+          </button>
+        )}
 
         {requeteDifferee.trim() && !avecEquipements && (
           <button className="bouton fantome" onClick={() => setAvecEquipements(true)}>

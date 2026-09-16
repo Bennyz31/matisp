@@ -150,15 +150,17 @@ export function nouvelleIntervention(dotationIds: string[]): InterventionLocale 
 export function nouvelleLigne(
   interventionId: string,
   dotationId: string,
-  produitId: string,
+  produitId: string | null,
   type: ConsommationLocale["type"] = "CONSOMME",
   auteur: string | null = null,
+  nomLibre: string | null = null,
 ): ConsommationLocale {
   return {
     id: ulid(),
     interventionId,
     dotationId,
     produitId,
+    nomLibre,
     quantite: 0,
     type,
     commentaire: null,
@@ -214,6 +216,7 @@ export async function synchroniser(): Promise<{ envoyees: number } | null> {
           interventionId: c.interventionId,
           dotationId: c.dotationId,
           produitId: c.produitId,
+          nomLibre: c.nomLibre,
           quantite: c.quantite,
           type: c.type,
           commentaire: c.commentaire,
@@ -242,7 +245,8 @@ type ConsommationDistante = {
   id: string;
   interventionId: string;
   dotationId: string;
-  produitId: string;
+  produitId: string | null;
+  nomLibre: string | null;
   quantite: number;
   type: ConsommationLocale["type"];
   commentaire: string | null;
@@ -298,6 +302,7 @@ async function rapatrier(): Promise<void> {
       interventionId: c.interventionId,
       dotationId: c.dotationId,
       produitId: c.produitId,
+      nomLibre: c.nomLibre,
       quantite: c.quantite,
       type: c.type,
       commentaire: c.commentaire,

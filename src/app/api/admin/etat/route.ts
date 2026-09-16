@@ -8,7 +8,7 @@ export const GET = (req: Request) =>
   gerer(async () => {
     if (!(await aucunCompte())) await exigerAdmin(req);
 
-    const [produits, consommables, modeles, dotations, utilisateurs, destinataires, aVerifier] =
+    const [produits, consommables, modeles, dotations, utilisateurs, destinataires, aVerifier, horsCatalogue] =
       await Promise.all([
         prisma.produit.count({ where: { actif: true } }),
         prisma.produit.count({ where: { actif: true, estConsommable: true } }),
@@ -17,6 +17,9 @@ export const GET = (req: Request) =>
         prisma.utilisateur.count(),
         prisma.destinataire.count({ where: { actif: true } }),
         prisma.produit.count({ where: { remarque: { not: null } } }),
+        // Déclarations saisies en intervention sans fiche catalogue (voir
+        // Consommation.nomLibre) : à examiner pour intégration au classeur.
+        prisma.consommation.count({ where: { produitId: null } }),
       ]);
 
     return {
@@ -27,6 +30,7 @@ export const GET = (req: Request) =>
       utilisateurs,
       destinataires,
       aVerifier,
+      horsCatalogue,
       messagerieConfiguree: Boolean(process.env.RESEND_API_KEY),
     };
   });

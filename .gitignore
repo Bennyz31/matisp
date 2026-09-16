@@ -5,3 +5,5 @@ out/
 .env*.local
 *.log
 .vercel
+*.tsbuildinfo
+.claude/settings.local.json

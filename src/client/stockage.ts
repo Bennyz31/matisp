@@ -127,7 +127,12 @@ export type ConsommationLocale = {
   id: string;
   interventionId: string;
   dotationId: string;
-  produitId: string;
+  /// Vide quand le produit n'est pas au catalogue : voir `nomLibre`.
+  produitId: string | null;
+  /// Nom saisi à la main pour un produit hors catalogue (sinon vide). L'appli
+  /// ne doit jamais bloquer une saisie faute de fiche catalogue (décision du
+  /// 16/09/2026) — le catalogue reste géré à la main par Ben via le classeur.
+  nomLibre: string | null;
   quantite: number;
   type: "CONSOMME" | "PERDU" | "CASSE";
   commentaire: string | null;
@@ -164,15 +169,22 @@ export async function consommationsDe(interventionId: string): Promise<Consommat
  * son identifiant, donc la resynchroniser met à jour la même ligne côté serveur
  * au lieu d'en créer une seconde.
  */
-export const cleLigne = (dotationId: string, produitId: string, type = "CONSOMME") =>
-  `${dotationId}|${produitId}|${type}`;
+export const cleLigne = (
+  dotationId: string,
+  produitId: string | null,
+  type = "CONSOMME",
+  nomLibre?: string | null,
+) =>
+  produitId
+    ? `${dotationId}|${produitId}|${type}`
+    : `${dotationId}|libre:${(nomLibre ?? "").trim().toLowerCase()}|${type}`;
 
 export async function lignesDe(
   interventionId: string,
 ): Promise<Map<string, ConsommationLocale>> {
   const carte = new Map<string, ConsommationLocale>();
   for (const c of await consommationsDe(interventionId)) {
-    carte.set(cleLigne(c.dotationId, c.produitId, c.type), c);
+    carte.set(cleLigne(c.dotationId, c.produitId, c.type, c.nomLibre), c);
   }
   return carte;
 }

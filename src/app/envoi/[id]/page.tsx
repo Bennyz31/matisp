@@ -30,9 +30,15 @@ type ReassortServeur = {
       quantite: number;
       type: "CONSOMME" | "PERDU" | "CASSE";
       commentaire: string | null;
+      horsCatalogue: boolean;
     }[];
   }[];
 };
+
+const mentionDe = (type: "CONSOMME" | "PERDU" | "CASSE", horsCatalogue: boolean): string | undefined =>
+  [type === "PERDU" ? "perdu" : type === "CASSE" ? "cassé" : null, horsCatalogue ? "hors catalogue" : null]
+    .filter((x): x is string => Boolean(x))
+    .join(", ") || undefined;
 
 function convertirReassort(r: ReassortServeur): DonneesPdf {
   return {
@@ -48,7 +54,7 @@ function convertirReassort(r: ReassortServeur): DonneesPdf {
         designation: l.designation,
         quantite: l.quantite,
         unite: l.unite,
-        mention: l.type === "PERDU" ? "perdu" : l.type === "CASSE" ? "cassé" : undefined,
+        mention: mentionDe(l.type, l.horsCatalogue),
       })),
     })),
   };
@@ -63,7 +69,9 @@ function convertirReassort(r: ReassortServeur): DonneesPdf {
 function grouperParProduit(liste: ConsommationLocale[]) {
   const groupes = new Map<string, { l: ConsommationLocale; total: number; auteurs: Set<string> }>();
   for (const l of liste) {
-    const cle = `${l.produitId}|${l.type}`;
+    const cle = l.produitId
+      ? `${l.produitId}|${l.type}`
+      : `libre:${(l.nomLibre ?? "").trim().toLowerCase()}|${l.type}`;
     const g = groupes.get(cle);
     if (g) {
       g.total += l.quantite;
@@ -94,9 +102,11 @@ function construireDonnees(
     declarants: tousAuteurs.size > 0 ? [...tousAuteurs] : [`${moi.prenom} ${moi.nom} (${moi.fonction})`],
     blocs: [...parDotation.entries()].map(([dotationId, liste]) => {
       const groupes = grouperParProduit(liste)
-        .map((g) => ({ ...g, p: parProduit.get(g.l.produitId) }))
-        .filter((x) => x.p)
-        .sort((a, b) => a.p!.designation.localeCompare(b.p!.designation, "fr"));
+        .map((g) => ({ ...g, p: g.l.produitId ? parProduit.get(g.l.produitId) : undefined }))
+        .filter((x) => x.p || x.l.nomLibre)
+        .sort((a, b) =>
+          (a.p?.designation ?? a.l.nomLibre ?? "").localeCompare(b.p?.designation ?? b.l.nomLibre ?? "", "fr"),
+        );
       const declarantsBloc = new Set<string>();
       for (const g of groupes) for (const a of g.auteurs) declarantsBloc.add(a);
       return {
@@ -105,11 +115,11 @@ function construireDonnees(
         dotation: catalogue.dotations.find((d) => d.id === dotationId)?.identifiant ?? "Dotation",
         declarants: declarantsBloc.size > 0 ? [...declarantsBloc] : [`${moi.prenom} ${moi.nom}`],
         lignes: groupes.map(({ l, total, p }) => ({
-          code: p!.code,
-          designation: p!.designation,
+          code: p?.code ?? "—",
+          designation: p?.designation ?? l.nomLibre ?? "Produit inconnu",
           quantite: total,
-          unite: p!.unite,
-          mention: l.type === "PERDU" ? "perdu" : l.type === "CASSE" ? "cassé" : undefined,
+          unite: p?.unite ?? "unité",
+          mention: mentionDe(l.type, !p),
         })),
       };
     }),

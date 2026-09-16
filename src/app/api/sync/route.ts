@@ -16,16 +16,23 @@ const intervention = z.object({
   dotationIds: z.array(z.string().uuid()).min(1),
 });
 
-const consommation = z.object({
-  id: ULID,
-  interventionId: ULID,
-  dotationId: z.string().uuid(),
-  produitId: z.string().uuid(),
-  quantite: z.number().int().min(0).max(999),
-  type: z.enum(["CONSOMME", "PERDU", "CASSE"]).default("CONSOMME"),
-  commentaire: z.string().trim().max(500).nullish(),
-  saisiLe: z.coerce.date(),
-});
+const consommation = z
+  .object({
+    id: ULID,
+    interventionId: ULID,
+    dotationId: z.string().uuid(),
+    // L'un ou l'autre : un produit du catalogue, ou un nom saisi à la main
+    // quand il en manque un (décision du 16/09/2026 — jamais bloquant).
+    produitId: z.string().uuid().nullish(),
+    nomLibre: z.string().trim().min(1).max(200).nullish(),
+    quantite: z.number().int().min(0).max(999),
+    type: z.enum(["CONSOMME", "PERDU", "CASSE"]).default("CONSOMME"),
+    commentaire: z.string().trim().max(500).nullish(),
+    saisiLe: z.coerce.date(),
+  })
+  .refine((c) => c.produitId || c.nomLibre, {
+    message: "produitId ou nomLibre requis.",
+  });
 
 const corps = z.object({
   interventions: z.array(intervention).max(100).default([]),
@@ -107,7 +114,8 @@ export const POST = (req: Request) =>
             interventionId: c.interventionId,
             utilisateurId: moi.sub,
             dotationId: c.dotationId,
-            produitId: c.produitId,
+            produitId: c.produitId ?? null,
+            nomLibre: c.produitId ? null : (c.nomLibre ?? null),
             quantite: c.quantite,
             type: c.type,
             commentaire: c.commentaire ?? null,
