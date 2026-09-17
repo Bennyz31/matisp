@@ -2,15 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { rafraichirCatalogue, synchroniser } from "@/client/session";
+import { api, ErreurApi, rafraichirCatalogue, synchroniser } from "@/client/session";
 import {
   listerConsommations,
   listerInterventions,
   lireCatalogue,
+  supprimer as supprimerLocale,
   type Catalogue,
   type InterventionLocale,
 } from "@/client/stockage";
-import { Barre, Chargement, useProfil } from "@/client/ui";
+import { Barre, Chargement, LigneAction, useProfil } from "@/client/ui";
 
 const dateCourte = (iso: string) =>
   new Intl.DateTimeFormat("fr-FR", {
@@ -54,6 +55,26 @@ export default function Accueil() {
     void rafraichirCatalogue().then((c) => c && setCatalogue(c));
     void synchroniser().then(charger);
   }, [moi, charger]);
+
+  /**
+   * Supprime définitivement (admin seulement, cf. Historique). Une 404 veut
+   * dire qu'elle a déjà été supprimée côté serveur sans que ce téléphone le
+   * sache encore (cas vécu par Ben le 17/09/2026 : de vieux brouillons de
+   * test restaient coincés en local après un ménage fait ailleurs) — on
+   * retire quand même la copie locale au lieu de laisser une erreur bloquer.
+   */
+  async function supprimer(id: string) {
+    if (!window.confirm("Supprimer définitivement cette intervention ? Cette action est irréversible.")) {
+      return;
+    }
+    try {
+      await api(`/interventions/${id}`, { method: "DELETE" });
+    } catch (e) {
+      if (!(e instanceof ErreurApi && e.statut === 404)) throw e;
+    }
+    await supprimerLocale("interventions", id);
+    await charger();
+  }
 
   if (moi === undefined) return <Chargement />;
   if (!moi) return null;
@@ -105,14 +126,15 @@ export default function Accueil() {
         {interventions.length > 0 && (
           <>
             <p className="libelle">En cours et à envoyer</p>
-            {interventions.map((i) => (
-              <button
-                key={i.id}
-                className="ligne"
-                onClick={() =>
-                  router.push(i.statut === "BROUILLON" ? `/saisie/${i.id}` : `/recap/${i.id}`)
-                }
-              >
+            {interventions.map((i) => {
+              const ouvrir = () => router.push(i.statut === "BROUILLON" ? `/saisie/${i.id}` : `/recap/${i.id}`);
+              // Toutes les lignes ici sont déjà non clôturées (filtrées plus haut).
+              const actions = [
+                { label: "Modifier", onSelect: ouvrir },
+                ...(moi.admin ? [{ label: "Supprimer", danger: true, onSelect: () => void supprimer(i.id) }] : []),
+              ];
+              return (
+              <LigneAction key={i.id} onClick={ouvrir} actions={actions}>
                 <span className="nom">
                   {dateCourte(i.debutLe)}
                   <small>
@@ -124,8 +146,9 @@ export default function Accueil() {
                 <span className={`etiquette ${i.statut === "BROUILLON" ? "et-brouillon" : "et-envoyer"}`}>
                   {i.statut === "BROUILLON" ? "brouillon" : "à envoyer"}
                 </span>
-              </button>
-            ))}
+              </LigneAction>
+              );
+            })}
           </>
         )}
 

@@ -275,24 +275,44 @@ select.champ {
   place-items: center;
 }
 
-/* Action secondaire courte à l'intérieur d'une .ligne (ex. Archiver,
-   Supprimer) : .bouton est pensé pour un CTA pleine largeur, il déborderait
-   ici (constaté en testant l'archivage de l'historique, le 17/09/2026). */
-.action {
-  flex: none;
-  width: auto;
-  display: inline-block;
-  padding: 8px 12px;
-  border-radius: var(--r);
-  font-size: 12.5px;
-  font-weight: 600;
-  background: transparent;
-  color: var(--ardoise);
-  border: 1px solid var(--line-fort);
-  white-space: nowrap;
+/* Menu contextuel déclenché par un appui long sur une .ligne (archiver,
+   supprimer…) — décision de Ben du 17/09/2026, remplace des boutons toujours
+   visibles dans la ligne. */
+.voile {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 40;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
 }
-.action:disabled {
-  opacity: 0.45;
+.menu-contextuel {
+  width: calc(100% - 32px);
+  max-width: 420px;
+  margin-bottom: 24px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.menu-contextuel button {
+  padding: 16px;
+  text-align: center;
+  font-size: 15.5px;
+  background: var(--surface);
+  color: var(--ink);
+  border-bottom: 1px solid var(--line);
+}
+.menu-contextuel button:last-child {
+  border-bottom: none;
+  color: var(--ink-3);
+}
+.menu-contextuel button.danger {
+  color: var(--rouge);
+  font-weight: 600;
 }
 
 .compteur {

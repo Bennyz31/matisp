@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { profil, type Profil } from "./session";
 
@@ -94,6 +94,86 @@ export function useTheme(): [Theme, (t: Theme) => void] {
 
 export function Chargement({ texte = "Un instant…" }: { texte?: string }) {
   return <div className="centre">{texte}</div>;
+}
+
+/**
+ * Ligne de liste (intervention, etc.) avec un appui long qui propose des
+ * actions (archiver, supprimer…) au lieu de boutons toujours visibles dans
+ * la ligne — décision de Ben du 17/09/2026, plus proche des habitudes d'un
+ * téléphone. Un appui court déclenche `onClick` normalement ; l'appui long
+ * ouvre le menu et annule le clic qui suivrait.
+ */
+export function LigneAction({
+  onClick,
+  actions,
+  className = "ligne",
+  children,
+}: {
+  onClick: () => void;
+  actions: { label: string; onSelect: () => void; danger?: boolean }[];
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const [ouvert, setOuvert] = useState(false);
+  const declenche = useRef(false);
+  const minuteur = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const demarrer = () => {
+    declenche.current = false;
+    minuteur.current = setTimeout(() => {
+      declenche.current = true;
+      setOuvert(true);
+    }, 500);
+  };
+  const annuler = () => {
+    if (minuteur.current !== null) {
+      clearTimeout(minuteur.current);
+      minuteur.current = null;
+    }
+  };
+  const clic = () => {
+    if (declenche.current) {
+      declenche.current = false;
+      return;
+    }
+    onClick();
+  };
+
+  return (
+    <>
+      <div
+        className={className}
+        style={{ cursor: "pointer" }}
+        onClick={clic}
+        onPointerDown={actions.length > 0 ? demarrer : undefined}
+        onPointerUp={annuler}
+        onPointerLeave={annuler}
+        onPointerCancel={annuler}
+        onContextMenu={(e) => actions.length > 0 && e.preventDefault()}
+      >
+        {children}
+      </div>
+      {ouvert && (
+        <div className="voile" onClick={() => setOuvert(false)}>
+          <div className="menu-contextuel" onClick={(e) => e.stopPropagation()}>
+            {actions.map((a) => (
+              <button
+                key={a.label}
+                className={a.danger ? "danger" : ""}
+                onClick={() => {
+                  setOuvert(false);
+                  a.onSelect();
+                }}
+              >
+                {a.label}
+              </button>
+            ))}
+            <button onClick={() => setOuvert(false)}>Annuler</button>
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
 
 export function Compteur({

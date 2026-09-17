@@ -10,7 +10,7 @@ import {
   lireCatalogue,
   lireIntervention,
 } from "@/client/stockage";
-import { Barre, Chargement, useProfil } from "@/client/ui";
+import { Barre, Chargement, LigneAction, useProfil } from "@/client/ui";
 
 type Ligne = {
   id: string;
@@ -44,7 +44,6 @@ export default function Historique() {
   const moi = useProfil();
   const [lignes, setLignes] = useState<Ligne[] | null>(null);
   const [source, setSource] = useState<"serveur" | "local">("serveur");
-  const [occupe, setOccupe] = useState<string | null>(null);
 
   const charger = useCallback(async () => {
     try {
@@ -89,38 +88,26 @@ export default function Historique() {
     void charger();
   }, [moi, charger]);
 
-  async function archiver(id: string, e: React.MouseEvent) {
-    e.stopPropagation();
-    setOccupe(id);
-    try {
-      if (source === "serveur") {
-        await api(`/interventions/${id}/archiver`, { method: "POST" });
-      } else {
-        // Hors connexion : écrit localement, repartira au prochain réseau.
-        const locale = await lireIntervention(id);
-        if (locale) {
-          await ecrireIntervention(archiverIntervention(locale));
-          void synchroniser();
-        }
+  async function archiver(id: string) {
+    if (source === "serveur") {
+      await api(`/interventions/${id}/archiver`, { method: "POST" });
+    } else {
+      // Hors connexion : écrit localement, repartira au prochain réseau.
+      const locale = await lireIntervention(id);
+      if (locale) {
+        await ecrireIntervention(archiverIntervention(locale));
+        void synchroniser();
       }
-      setLignes((l) => l?.filter((x) => x.id !== id) ?? l);
-    } finally {
-      setOccupe(null);
     }
+    setLignes((l) => l?.filter((x) => x.id !== id) ?? l);
   }
 
-  async function supprimer(id: string, e: React.MouseEvent) {
-    e.stopPropagation();
+  async function supprimer(id: string) {
     if (!window.confirm("Supprimer définitivement cette intervention ? Cette action est irréversible.")) {
       return;
     }
-    setOccupe(id);
-    try {
-      await api(`/interventions/${id}`, { method: "DELETE" });
-      setLignes((l) => l?.filter((x) => x.id !== id) ?? l);
-    } finally {
-      setOccupe(null);
-    }
+    await api(`/interventions/${id}`, { method: "DELETE" });
+    setLignes((l) => l?.filter((x) => x.id !== id) ?? l);
   }
 
   if (moi === undefined || lignes === null) return <Chargement />;
@@ -136,13 +123,16 @@ export default function Historique() {
         {lignes.length === 0 && <p className="note">Aucune intervention pour le moment.</p>}
         {lignes.map((i) => {
           const e = ETIQUETTES[i.statut] ?? ETIQUETTES.BROUILLON!;
+          const ouvrir = () => router.push(i.statut === "BROUILLON" ? `/saisie/${i.id}` : `/envoi/${i.id}`);
+          const actions = [
+            ...(i.statut !== "CLOTUREE" ? [{ label: "Modifier", onSelect: ouvrir }] : []),
+            ...(i.statut === "CLOTUREE" ? [{ label: "Archiver", onSelect: () => void archiver(i.id) }] : []),
+            ...(moi.admin && source === "serveur"
+              ? [{ label: "Supprimer", danger: true, onSelect: () => void supprimer(i.id) }]
+              : []),
+          ];
           return (
-            <div
-              key={i.id}
-              className="ligne"
-              style={{ cursor: "pointer" }}
-              onClick={() => router.push(i.statut === "BROUILLON" ? `/saisie/${i.id}` : `/envoi/${i.id}`)}
-            >
+            <LigneAction key={i.id} onClick={ouvrir} actions={actions}>
               <span className="nom">
                 {dateCourte(i.debutLe)}
                 <small>
@@ -152,21 +142,7 @@ export default function Historique() {
                 </small>
               </span>
               <span className={`etiquette ${e.classe}`}>{e.texte}</span>
-              {i.statut === "CLOTUREE" && (
-                <button className="action" disabled={occupe === i.id} onClick={(ev) => void archiver(i.id, ev)}>
-                  Archiver
-                </button>
-              )}
-              {moi.admin && (
-                <button
-                  className="action"
-                  disabled={occupe === i.id || source === "local"}
-                  onClick={(ev) => void supprimer(i.id, ev)}
-                >
-                  Supprimer
-                </button>
-              )}
-            </div>
+            </LigneAction>
           );
         })}
       </div>
