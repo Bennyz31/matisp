@@ -287,9 +287,9 @@ export async function importerCatalogue(fichier: ArrayBuffer): Promise<ResultatI
       (
         await prisma.utilisateur.findMany({
           where: { matricule: { in: lignesUtil.map((x) => x.matricule) } },
-          select: { id: true, matricule: true },
+          select: { matricule: true, admin: true },
         })
-      ).map((u) => [u.matricule, u.id] as const),
+      ).map((u) => [u.matricule, u.admin] as const),
     );
 
     const resultats = await Promise.all(
@@ -301,17 +301,27 @@ export async function importerCatalogue(fichier: ArrayBuffer): Promise<ResultatI
         }
 
         const cisId = cisParCode.get(texte(l["CIS"])) ?? null;
-        const actif = texte(l["ACTIF"]) === "" ? true : oui(l["ACTIF"]);
-        const estAdmin = premierCompte && rang === 0;
+        const brutActif = texte(l["ACTIF"]);
+        const actif = brutActif === "" ? true : oui(brutActif);
+        /**
+         * Droit technique d'administration, indépendant de la fonction
+         * professionnelle (voir schéma) : désigné par Ben en ajoutant
+         * « (ADMIN) » dans la colonne ACTIF du classeur (ex. « O (ADMIN) »),
+         * recalculé à chaque import comme accesVLM — retirer la mention et
+         * réimporter révoque le droit. Le tout premier compte importé reçoit
+         * aussi ce droit, pour amorcer le tout premier déploiement avant que
+         * quiconque ait pu être désigné.
+         */
+        const admin = /\(ADMIN\)/i.test(brutActif) || (premierCompte && rang === 0);
         // Recalculé à chaque import : un ISP nouvellement ajouté récupère l'accès
         // VLM automatiquement, sans repasser par l'administration.
         const accesVLM = fonction === "ISP" || MATRICULES_VLM.has(matricule);
-        const existantId = existantsUtil.get(matricule);
+        const etaitAdmin = existantsUtil.get(matricule);
 
-        const utilisateur = existantId
+        const utilisateur = etaitAdmin !== undefined
           ? await prisma.utilisateur.update({
               where: { matricule },
-              data: { nom, prenom: texte(l["PRENOM"]), fonction, cisId, actif, accesVLM },
+              data: { nom, prenom: texte(l["PRENOM"]), fonction, cisId, actif, accesVLM, admin },
             })
           : await prisma.utilisateur.create({
               data: {
@@ -319,10 +329,7 @@ export async function importerCatalogue(fichier: ArrayBuffer): Promise<ResultatI
                 nom,
                 prenom: texte(l["PRENOM"]),
                 fonction,
-                // Le tout premier utilisateur importé devient administrateur — droit
-                // technique séparé de la fonction professionnelle (voir schéma) :
-                // il reste ISP/MSP/etc., il n'est pas transformé en « ADMIN ».
-                admin: estAdmin,
+                admin,
                 accesVLM,
                 cisId,
                 actif,
@@ -331,10 +338,10 @@ export async function importerCatalogue(fichier: ArrayBuffer): Promise<ResultatI
               },
             });
 
-        if (estAdmin) {
-          avertissements.push(
-            `${nomComplet(utilisateur.prenom, utilisateur.nom)} a reçu le rôle administrateur (premier compte créé).`,
-          );
+        if (admin && !etaitAdmin) {
+          avertissements.push(`${nomComplet(utilisateur.prenom, utilisateur.nom)} devient administrateur.`);
+        } else if (!admin && etaitAdmin) {
+          avertissements.push(`${nomComplet(utilisateur.prenom, utilisateur.nom)} n'est plus administrateur.`);
         }
         return { utilisateur, codeDotation: texte(l["DOTATION HABITUELLE"]) };
       }),

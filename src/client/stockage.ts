@@ -121,6 +121,9 @@ export type InterventionLocale = {
   statut: "BROUILLON" | "TERMINEE" | "ENVOYEE" | "CLOTUREE";
   dotationIds: string[];
   synchronisee: boolean;
+  /// Masque l'intervention de l'historique sans l'effacer (décision du
+  /// 17/09/2026) — n'a de sens que si `statut === "CLOTUREE"`.
+  archiveeLe: string | null;
 };
 
 export type ConsommationLocale = {

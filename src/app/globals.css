@@ -275,6 +275,26 @@ select.champ {
   place-items: center;
 }
 
+/* Action secondaire courte à l'intérieur d'une .ligne (ex. Archiver,
+   Supprimer) : .bouton est pensé pour un CTA pleine largeur, il déborderait
+   ici (constaté en testant l'archivage de l'historique, le 17/09/2026). */
+.action {
+  flex: none;
+  width: auto;
+  display: inline-block;
+  padding: 8px 12px;
+  border-radius: var(--r);
+  font-size: 12.5px;
+  font-weight: 600;
+  background: transparent;
+  color: var(--ardoise);
+  border: 1px solid var(--line-fort);
+  white-space: nowrap;
+}
+.action:disabled {
+  opacity: 0.45;
+}
+
 .compteur {
   display: flex;
   align-items: center;

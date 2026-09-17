@@ -10,14 +10,21 @@ export const GET = (req: Request) =>
   gerer(async () => {
     const moi = await exigerUtilisateur(req);
 
-    // Le pharmacien consulte ce qui lui a été adressé ; il ne clôture rien.
-    const filtre =
-      moi.fonction === "PHARMACIEN" || moi.admin
+    // Décision du 17/09/2026 (Ben) : un administrateur voit l'historique de
+    // tous les agents, quel que soit le statut (pas seulement ce qui a été
+    // envoyé). Le pharmacien, lui, ne consulte que ce qui lui a été adressé —
+    // il ne clôture rien. Un agent normal ne voit que ses propres interventions.
+    const filtre = moi.admin
+      ? {}
+      : moi.fonction === "PHARMACIEN"
         ? { envois: { some: {} } }
         : { utilisateurs: { some: { utilisateurId: moi.sub } } };
 
     const interventions = await prisma.intervention.findMany({
-      where: filtre,
+      // Archivée = masquée de l'historique sans être effacée (décision du
+      // 17/09/2026) : n'importe quel déclarant peut archiver une intervention
+      // clôturée pour ne pas polluer sa liste.
+      where: { ...filtre, archiveeLe: null },
       orderBy: { debutLe: "desc" },
       take: 80,
       include: {

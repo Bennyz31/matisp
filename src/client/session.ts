@@ -145,7 +145,13 @@ export function nouvelleIntervention(dotationIds: string[]): InterventionLocale 
     statut: "BROUILLON",
     dotationIds,
     synchronisee: false,
+    archiveeLe: null,
   };
+}
+
+/** Masque une intervention clôturée de l'historique, sans l'effacer. */
+export function archiverIntervention(intervention: InterventionLocale): InterventionLocale {
+  return { ...intervention, archiveeLe: new Date().toISOString(), synchronisee: false };
 }
 
 export function nouvelleLigne(
@@ -211,6 +217,7 @@ export async function synchroniser(): Promise<{ envoyees: number } | null> {
           crss: i.crss,
           statut: i.statut,
           dotationIds: i.dotationIds,
+          archiveeLe: i.archiveeLe,
         })),
         consommations: lignesValides.map((c) => ({
           id: c.id,
@@ -262,6 +269,7 @@ type InterventionDistante = {
   crss: string | null;
   statut: InterventionLocale["statut"];
   dotations: { dotationId: string }[];
+  archiveeLe: string | null;
 };
 
 /**
@@ -293,6 +301,10 @@ async function rapatrier(): Promise<void> {
       dotationIds: Array.from(
         new Set([...(locale?.dotationIds ?? []), ...i.dotations.map((d) => d.dotationId)]),
       ),
+      // Comme le statut : un archivage déjà fait sur ce téléphone n'est
+      // jamais annulé par un rapatriement qui n'en sait pas encore rien
+      // (aucune fonctionnalité de désarchivage n'existe de toute façon).
+      archiveeLe: locale?.archiveeLe ?? i.archiveeLe,
       synchronisee: true,
     });
   }

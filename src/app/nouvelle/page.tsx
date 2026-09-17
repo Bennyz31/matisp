@@ -64,6 +64,7 @@ export default function Nouvelle() {
         crss: i.crss,
         statut: i.statut,
         dotationIds: i.dotations.map((d) => d.dotationId),
+        archiveeLe: null,
         // Non synchronisée sur CE téléphone : le prochain envoi m'inscrit
         // comme contributeur de l'intervention, sans rien écraser.
         synchronisee: false,

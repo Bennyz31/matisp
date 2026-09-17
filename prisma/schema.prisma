@@ -227,6 +227,11 @@ model Intervention {
   statut        StatutIntervention @default(BROUILLON)
   verrouilleeLe DateTime?
   clotureeLe    DateTime?
+  /// Masque l'intervention de l'historique sans effacer la donnée (décision
+  /// du 17/09/2026, Ben) : n'importe quel déclarant peut archiver une
+  /// intervention clôturée pour ne pas polluer sa liste ; seul un
+  /// administrateur peut la supprimer pour de bon (DELETE /api/interventions/:id).
+  archiveeLe    DateTime?
   protocoleId   String?
   protocole     Protocole?         @relation(fields: [protocoleId], references: [id])
   creeLe        DateTime           @default(now())

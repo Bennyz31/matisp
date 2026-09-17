@@ -1,9 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api } from "@/client/session";
-import { listerConsommations, listerInterventions, lireCatalogue } from "@/client/stockage";
+import { api, archiverIntervention, synchroniser } from "@/client/session";
+import {
+  ecrireIntervention,
+  listerConsommations,
+  listerInterventions,
+  lireCatalogue,
+  lireIntervention,
+} from "@/client/stockage";
 import { Barre, Chargement, useProfil } from "@/client/ui";
 
 type Ligne = {
@@ -38,40 +44,84 @@ export default function Historique() {
   const moi = useProfil();
   const [lignes, setLignes] = useState<Ligne[] | null>(null);
   const [source, setSource] = useState<"serveur" | "local">("serveur");
+  const [occupe, setOccupe] = useState<string | null>(null);
+
+  const charger = useCallback(async () => {
+    try {
+      const r = await api<{ interventions: Ligne[] }>("/interventions");
+      setSource("serveur");
+      setLignes(r.interventions);
+    } catch {
+      // Hors connexion : on retombe sur ce que contient le téléphone.
+      setSource("local");
+      const [locales, consommations, catalogue] = await Promise.all([
+        listerInterventions(),
+        listerConsommations(),
+        lireCatalogue(),
+      ]);
+      setLignes(
+        locales
+          // Une intervention archivée localement ne doit pas non plus polluer
+          // la vue hors connexion.
+          .filter((i) => !i.archiveeLe)
+          .sort((a, b) => b.debutLe.localeCompare(a.debutLe))
+          .map((i) => {
+            const siennes = consommations.filter((c) => c.interventionId === i.id && c.quantite > 0);
+            return {
+              id: i.id,
+              debutLe: i.debutLe,
+              crss: i.crss,
+              statut: i.statut,
+              dotations: i.dotationIds.map(
+                (d) => catalogue?.dotations.find((x) => x.id === d)?.libelle ?? "dotation",
+              ),
+              declarants: [],
+              nbReferences: siennes.length,
+              nbUnites: siennes.reduce((s, c) => s + c.quantite, 0),
+            };
+          }),
+      );
+    }
+  }, []);
 
   useEffect(() => {
     if (!moi) return;
-    api<{ interventions: Ligne[] }>("/interventions")
-      .then((r) => setLignes(r.interventions))
-      .catch(async () => {
-        // Hors connexion : on retombe sur ce que contient le téléphone.
-        setSource("local");
-        const [locales, consommations, catalogue] = await Promise.all([
-          listerInterventions(),
-          listerConsommations(),
-          lireCatalogue(),
-        ]);
-        setLignes(
-          locales
-            .sort((a, b) => b.debutLe.localeCompare(a.debutLe))
-            .map((i) => {
-              const siennes = consommations.filter((c) => c.interventionId === i.id && c.quantite > 0);
-              return {
-                id: i.id,
-                debutLe: i.debutLe,
-                crss: i.crss,
-                statut: i.statut,
-                dotations: i.dotationIds.map(
-                  (d) => catalogue?.dotations.find((x) => x.id === d)?.libelle ?? "dotation",
-                ),
-                declarants: [],
-                nbReferences: siennes.length,
-                nbUnites: siennes.reduce((s, c) => s + c.quantite, 0),
-              };
-            }),
-        );
-      });
-  }, [moi]);
+    void charger();
+  }, [moi, charger]);
+
+  async function archiver(id: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    setOccupe(id);
+    try {
+      if (source === "serveur") {
+        await api(`/interventions/${id}/archiver`, { method: "POST" });
+      } else {
+        // Hors connexion : écrit localement, repartira au prochain réseau.
+        const locale = await lireIntervention(id);
+        if (locale) {
+          await ecrireIntervention(archiverIntervention(locale));
+          void synchroniser();
+        }
+      }
+      setLignes((l) => l?.filter((x) => x.id !== id) ?? l);
+    } finally {
+      setOccupe(null);
+    }
+  }
+
+  async function supprimer(id: string, e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!window.confirm("Supprimer définitivement cette intervention ? Cette action est irréversible.")) {
+      return;
+    }
+    setOccupe(id);
+    try {
+      await api(`/interventions/${id}`, { method: "DELETE" });
+      setLignes((l) => l?.filter((x) => x.id !== id) ?? l);
+    } finally {
+      setOccupe(null);
+    }
+  }
 
   if (moi === undefined || lignes === null) return <Chargement />;
   if (!moi) return null;
@@ -87,12 +137,11 @@ export default function Historique() {
         {lignes.map((i) => {
           const e = ETIQUETTES[i.statut] ?? ETIQUETTES.BROUILLON!;
           return (
-            <button
+            <div
               key={i.id}
               className="ligne"
-              onClick={() =>
-                router.push(i.statut === "BROUILLON" ? `/saisie/${i.id}` : `/envoi/${i.id}`)
-              }
+              style={{ cursor: "pointer" }}
+              onClick={() => router.push(i.statut === "BROUILLON" ? `/saisie/${i.id}` : `/envoi/${i.id}`)}
             >
               <span className="nom">
                 {dateCourte(i.debutLe)}
@@ -103,7 +152,21 @@ export default function Historique() {
                 </small>
               </span>
               <span className={`etiquette ${e.classe}`}>{e.texte}</span>
-            </button>
+              {i.statut === "CLOTUREE" && (
+                <button className="action" disabled={occupe === i.id} onClick={(ev) => void archiver(i.id, ev)}>
+                  Archiver
+                </button>
+              )}
+              {moi.admin && (
+                <button
+                  className="action"
+                  disabled={occupe === i.id || source === "local"}
+                  onClick={(ev) => void supprimer(i.id, ev)}
+                >
+                  Supprimer
+                </button>
+              )}
+            </div>
           );
         })}
       </div>

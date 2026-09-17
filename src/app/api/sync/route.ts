@@ -14,6 +14,10 @@ const intervention = z.object({
   crss: z.string().trim().max(40).nullish(),
   statut: z.enum(["BROUILLON", "TERMINEE", "ENVOYEE", "CLOTUREE"]).default("BROUILLON"),
   dotationIds: z.array(z.string().uuid()).min(1),
+  // N'importe quel déclarant peut archiver (masquer de l'historique) une
+  // intervention clôturée — décision du 17/09/2026. Ignoré si l'intervention
+  // n'est pas (encore) clôturée : on ne fait pas confiance au seul client.
+  archiveeLe: z.coerce.date().nullish(),
 });
 
 const consommation = z
@@ -60,6 +64,7 @@ export const POST = (req: Request) =>
         await prisma.$transaction(async (tx) => {
           const existante = await tx.intervention.findUnique({ where: { id: i.id } });
           if (existante) {
+            const statutFinal = rangStatut(i.statut) > rangStatut(existante.statut) ? i.statut : existante.statut;
             await tx.intervention.update({
               where: { id: i.id },
               data: {
@@ -67,6 +72,7 @@ export const POST = (req: Request) =>
                 finLe: i.finLe ?? undefined,
                 // Le statut n'est jamais rétrogradé par une synchro tardive.
                 statut: rangStatut(i.statut) > rangStatut(existante.statut) ? i.statut : undefined,
+                archiveeLe: i.archiveeLe && statutFinal === "CLOTUREE" ? i.archiveeLe : undefined,
               },
             });
           } else {
